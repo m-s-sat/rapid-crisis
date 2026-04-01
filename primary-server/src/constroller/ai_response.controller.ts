@@ -1,40 +1,55 @@
 import type { Request, Response } from "express";
-import type { aiResponse } from "../schema/ai_response.js";
-import { connectToRedis } from "../db/redis.js";
+import { redisManagerInstance } from "../db/redis.js";
+import type { ai_response } from "../schema/ai_response.interface.js";
+import { AiResponse } from "../models/ai_response.model.js";
 
-export async function sendAiResponseToQueue(req: Request, res: Response){
-    try{
-        const {crisis_type, confidence_score, venue_type, venue_name} = req.body;
-        if(!crisis_type || !confidence_score || !venue_type || !venue_name){
-            return res.json({
+export async function sendAiResponseToQueue(req: Request, res: Response): Promise<any> {
+    try {
+        const aiResponse: ai_response = req.body;
+        if(!aiResponse.crisis){
+            console.log("no crisis encountered");
+            return res.send({
                 success: false,
-                message: "Missing required fields",
-            })
+                message: "no crisis encountered",
+            });
         }
-        const aiResponse: aiResponse = {
-            crisis_type,
-            confidence_score,
-            venue_type,
-            venue_name
-        }
-        const client = await connectToRedis();
-        if(!client){
-            return res.json({
+        
+        const venue_details = await AiResponse.findOne({venue: aiResponse.venue}).populate("venue");
+        const crisis_details = await AiResponse.findOne({crisis: aiResponse.crisis}).populate("crisis");
+        if(!venue_details || !crisis_details){
+            console.log("no venue and crisis found");
+            return res.send({
                 success: false,
-                message: "Failed to connect to redis",
-            })
+                message: "no venue and crisis found"
+            });
         }
-        await client.lPush("ai_response", JSON.stringify(aiResponse));
-        return res.json({
+        const redisPayload = {
+            venue_details: venue_details.venue,
+            crisis_details: crisis_details.crisis,
+            confidence_score: aiResponse.confidence_score,
+            status: aiResponse.status
+        }
+        const redisClient = await redisManagerInstance.getClient();
+        if(!redisClient){
+            console.log("no redis client found");
+            return res.send({
+                success: false,
+                message: "no redis client found"
+            });
+        }
+        await redisClient.lPush("ai_response", JSON.stringify(redisPayload));
+        return res.send({
             success: true,
             message: "AI response sent to queue",
-        })
+            data: redisPayload
+        });
     }
-    catch(err){
+    catch (err: any) {
+        console.error("AI Response Controller Error:", err);
         return res.json({
             success: false,
             message: "Failed to send AI response to queue",
-            error: err
+            error: err.message || err.toString()
         })
     }
 }

@@ -1,12 +1,15 @@
 import express from 'express';
+import { createClient } from 'redis';
 import morgan from 'morgan'
 import cors from 'cors';
-import { connectToPg } from './db/pg.js';
-import { connectToRedis } from './db/redis.js';
+import { redisManagerInstance } from './db/redis.js';
 import { env } from './config/env.js';
-import WebSocket, { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import http from 'http';
 import session from 'express-session';
+import { mongoManagerInstance } from './db/mongo.js';
+import { sendAiResponseToQueue } from './constroller/ai_response.controller.js';
+import { adminDecision } from './constroller/admin.controller.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -16,7 +19,7 @@ app.use(express.json());
 app.use(morgan('dev'));
 app.use(cors());
 app.use(session({
-    secret: env.SESSION_SECRET,
+    secret: env.SESSION_SECRET!,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -24,27 +27,81 @@ app.use(session({
     }
 }));
 
-wss.on('connection', (ws) => {
+interface CustomWebSocket extends WebSocket {
+    venue_id?: string;
+}
+
+wss.on('connection', (ws: CustomWebSocket, req) => {
     ws.on('error', console.error);
+    
+    try {
+        const urlParams = new URL(req.url || '', `http://${req.headers.host}`);
+        const venue_id = urlParams.searchParams.get('venue_id');
+        if (venue_id) {
+            ws.venue_id = venue_id;
+        }
+    } catch (err) {
+        console.error("Error parsing WS URL: ", err);
+    }
 });
+
+export const activeTimeouts = new Map<string, NodeJS.Timeout>();
+
+app.post('/api/ai/response', sendAiResponseToQueue);
+
+app.post('/api/admin/decision', adminDecision);
 
 async function startServer() {
     try {
-        const pgPool = await connectToPg();
-        const redisClient = await connectToRedis();
-        const subscriber = await connectToRedis();
-        
-        if (!pgPool || !redisClient || !subscriber) {
+        const redisClient = await redisManagerInstance.init();
+        const mongoClient = await mongoManagerInstance.init();
+
+        if (!redisClient || !mongoClient) {
             console.error("Failed to connect to database or redis");
             process.exit(1);
         }
 
-        await subscriber.subscribe('messaging_status', (message) => {
-            wss.clients.forEach((client) => {
-                if (client.readyState === WebSocket.OPEN) {
-                    client.send(message);
+        const subscriberClient = createClient({
+            url: typeof env.REDIS_URL === "string" ? env.REDIS_URL : JSON.stringify(env.REDIS_URL)
+        });
+        await subscriberClient.connect();
+
+        await subscriberClient.subscribe('messaging_status', (message) => {
+            try {
+                const parsed = JSON.parse(message);
+                
+                if (parsed.type === 'decided_by_admin' && parsed.payload && parsed.payload.crisis_details) {
+                    const crisisId = parsed.payload.crisis_details._id || parsed.payload.crisis_details;
+                    const venueId = parsed.venue_id;
+
+                    const timeoutId = setTimeout(() => {
+                        activeTimeouts.delete(crisisId);
+                        const expirationMessage = JSON.stringify({
+                            type: 'expired',
+                            crisis_id: crisisId,
+                            venue_id: venueId,
+                            message: "Timer expired."
+                        });
+                        
+                        wss.clients.forEach((client: any) => {
+                            if (client.readyState === WebSocket.OPEN && client.venue_id === venueId) {
+                                client.send(expirationMessage);
+                            }
+                        });
+                        console.log(`Decision timeout for crisis ${crisisId}`);
+                    }, 15 * 60 * 1000); 
+
+                    activeTimeouts.set(crisisId, timeoutId);
                 }
-            });
+
+                wss.clients.forEach((client: any) => {
+                    if (client.readyState === WebSocket.OPEN && (!parsed.venue_id || client.venue_id === parsed.venue_id)) {
+                        client.send(message);
+                    }
+                });
+            } catch (err) {
+                console.error("Error with pubsub message parsing:", err);
+            }
         });
 
         server.listen(env.PORT, () => {

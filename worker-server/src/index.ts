@@ -1,70 +1,99 @@
-import { connectToPg } from "./db/pg.js";
-import { connectToRedis } from "./db/redis.js";
-import type { aiResponse, guestDetails, pgSaveData } from "./schema/ai_response.js";
+import { redisManagerInstance } from "./db/redis.js";
+import twilio from "twilio";
+import { env } from "./config/env.js";
 
-async function processAiResponse(aiResponse: aiResponse){
-    try{
-        const pool = await connectToPg();
-        if(!pool) return null;
-        const tempGuests: guestDetails[] = [
-            {
-                name: "Mrinal Satyarthi",
-                phoneNumber: "7645054550"
-            },
-            {
-                name: "Mrinal Satyarthi",
-                phoneNumber: "7645054550"
-            }
-        ]
-        const data: pgSaveData = {
-            id: crypto.randomUUID(),
-            crisis_type: aiResponse.crisis_type,
-            confidence_score: aiResponse.confidence_score,
-            vernue_type: aiResponse.venue_type,
-            venue_name: aiResponse.venue_name,
-            guests: tempGuests,
-            messages_status: 'pending',
-            created_at: new Date(),
-            updated_at: new Date(),
-        }
-        const insertQuery = `INSERT INTO ai_response (id, crisis_type, confidence_score, vernue_type, venue_name, messages_status, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
-        const values = [data.id, data.crisis_type, data.confidence_score, data.vernue_type, data.venue_name, data.messages_status, data.created_at, data.updated_at]
-        const result = await pool.query(insertQuery, values);
-        if(!result.rowCount) return null;
+const twilioClient = env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN
+    ? twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN)
+    : null;
 
-        if(data.confidence_score > 0.7){
-            const messagingClient = await connectToRedis();
-            if(!messagingClient) return null;
-            await messagingClient.lPush("messaging_queue", JSON.stringify(data));
-        }
-        return data;
+async function sendSms(to: string, body: string) {
+    if (!twilioClient) {
+        console.log(`[SIMULATED SMS] To: ${to} - Body: ${body}`);
+        return;
     }
-    catch(err: any){
-        console.error("Error processing ai response: ", err);
-        return null;
+    try {
+        await twilioClient.messages.create({
+            body,
+            from: typeof env.TWILIO_PHONE_NUMBER === "string" ? env.TWILIO_PHONE_NUMBER : JSON.stringify(env.TWILIO_PHONE_NUMBER),
+            to,
+        });
+    } catch (err: any) {
+        console.error("SMS error:", err?.message || err);
     }
 }
 
-async function startWorkerFunction(){
-    try{
-        const client = await connectToRedis();
-        if(!client){
+async function handleApprovedPayload(payload: any, redisClient: any) {
+    const venue = payload.venue_details;
+    const crisis = payload.crisis_details;
+    const body = `CRITICAL ALERT: A ${crisis.type} crisis has been confirmed at ${venue.name}. Please follow emergency procedures.`;
+
+    if (venue.guest_details && Array.isArray(venue.guest_details)) {
+        for (const guest of venue.guest_details) {
+            if (guest.phoneNumber) {
+                await sendSms(guest.phoneNumber, body);
+            }
+        }
+    }
+
+    if (venue.staff_details) {
+        const staffList = Object.values(venue.staff_details);
+        for (const staff of staffList) {
+            const s = staff as any;
+            if (s.phoneNumber) {
+                await sendSms(s.phoneNumber, body);
+            }
+        }
+    }
+
+    await redisClient.publish("messaging_status", JSON.stringify({
+        type: "sent",
+        venue_id: venue._id,
+        crisis_id: crisis._id
+    }));
+}
+
+async function startWorker() {
+    try {
+        const client = await redisManagerInstance.init();
+        if (!client) {
             console.error("Failed to connect to redis");
             process.exit(1);
         }
-        const takeAiResponse = await client.brPop("ai_response",0);
-        if(!takeAiResponse){
-            console.error("Failed to take ai response from queue");
-            process.exit(1);
+
+        console.log("Worker started, listening for tasks...");
+
+        while (true) {
+            const result = await client.brPop(["ai_response", "admin_approved"], 0);
+            if (!result) continue;
+
+            const { key, element } = result;
+            const payload = JSON.parse(element);
+
+            if (key === "admin_approved") {
+                await handleApprovedPayload(payload, client);
+            } else if (key === "ai_response") {
+                let score = payload.confidence_score;
+                if (score > 1) {
+                    score = score / 100;
+                }
+
+                if (score >= 0.70) {
+                    await handleApprovedPayload(payload, client);
+                } else if (score >= 0.40) {
+                    await client.publish("messaging_status", JSON.stringify({
+                        type: "decided_by_admin",
+                        venue_id: payload.venue_details._id,
+                        payload: payload
+                    }));
+                } else {
+                    console.log(`Ignoring payload with low confidence score: ${score}`);
+                }
+            }
         }
-        const aiResponse: aiResponse = JSON.parse(takeAiResponse.element);
-        await processAiResponse(aiResponse);
-        
-    }
-    catch(err){
-        console.error("Error starting worker function: ", err);
+    } catch (err) {
+        console.error("Worker error:", err);
         process.exit(1);
     }
 }
 
-startWorkerFunction();
+startWorker();
