@@ -21,6 +21,7 @@ export interface ai_response{
     crisis: Types.ObjectId;
     confidence_score: number;
     status: "pending" | "active" | "resolved";
+    zones?: string[];
     createdAt?: Date;
     updatedAt?: Date;
 }

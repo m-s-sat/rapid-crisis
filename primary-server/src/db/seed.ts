@@ -1,21 +1,27 @@
 import mongoose from "mongoose";
 import { crisisModel, venueModel, AiResponse } from "../models/ai_response.model.js";
+import { SensorEvidence } from "../models/sensor_evidence.model.js";
 import { env } from "../config/env.js";
 
 async function seed() {
     console.log("Connecting to MongoDB at", env.MONGO_URI, "...");
     await mongoose.connect(env.MONGO_URI);
-    
-    console.log("Clearing old test data...");
+
+    console.log("Clearing old data...");
     await crisisModel.deleteMany({});
     await venueModel.deleteMany({});
     await AiResponse.deleteMany({});
+    await SensorEvidence.deleteMany({});
 
-    console.log("Inserting Crisis...");
-    const crisis = new crisisModel({
-        type: "fire"
-    });
-    await crisis.save();
+    console.log("Inserting Crisis Types...");
+    const crisisTypes = await crisisModel.insertMany([
+        { type: "fire" },
+        { type: "gas_leak" },
+        { type: "earthquake" },
+        { type: "security" },
+        { type: "water_leak" },
+        { type: "air_quality" },
+    ]);
 
     console.log("Inserting Venue...");
     const venue = new venueModel({
@@ -27,14 +33,30 @@ async function seed() {
         zip: "94105",
         country: "USA",
         phone: "+917645054550",
-        email: "[EMAIL_ADDRESS]",
+        email: "info@grandplaza.com",
         staff_details: {
             "fire": {
                 name: "John Doe (Fire Safety Manager)",
                 phoneNumber: "+917645054550"
             },
-            "medical": {
-                name: "Jane Smith (Medic)",
+            "gas_leak": {
+                name: "Mike Chen (Maintenance Lead)",
+                phoneNumber: "+917645054550"
+            },
+            "earthquake": {
+                name: "Sarah Kim (Emergency Coordinator)",
+                phoneNumber: "+917645054550"
+            },
+            "security": {
+                name: "James Wilson (Security Chief)",
+                phoneNumber: "+917645054550"
+            },
+            "water_leak": {
+                name: "Tom Brown (Facilities Manager)",
+                phoneNumber: "+917645054550"
+            },
+            "air_quality": {
+                name: "Lisa Park (HVAC Specialist)",
                 phoneNumber: "+917645054550"
             }
         },
@@ -43,31 +65,42 @@ async function seed() {
                 name: "Alice Johnson",
                 phoneNumber: "+917645054550",
                 room_no: 402
+            },
+            {
+                name: "Bob Williams",
+                phoneNumber: "+917645054550",
+                room_no: 215
+            },
+            {
+                name: "Carol Davis",
+                phoneNumber: "+917645054550",
+                room_no: 508
             }
         ]
     });
     await venue.save();
 
-    console.log("Inserting AI Response record required for population...");
-    // The controller currently queries this collection to populate the payload for Redis!
-    const response = new AiResponse({
-        venue: venue._id,
-        crisis: crisis._id,
-        confidence_score: 0.85,
-        status: "active"
+    console.log("\n══════════════════════════════════════");
+    console.log("  SEEDING COMPLETE");
+    console.log("══════════════════════════════════════");
+    console.log("\n📦 Crisis Types:");
+    crisisTypes.forEach(c => {
+        console.log(`   ${c.type.padEnd(14)} → ${c._id}`);
     });
-    await response.save();
-
-    console.log("\n==================================");
-    console.log("✅ SEEDING COMPLETE!");
-    console.log("Use the following JSON body for your POST to http://localhost:3000/api/ai/response :\n");
-    console.log(JSON.stringify({
-        venue: venue._id,
-        crisis: crisis._id,
-        confidence_score: 0.85,
-        status: "active"
-    }, null, 2));
-    console.log("\n==================================\n");
+    console.log(`\n🏨 Venue: ${venue.name}`);
+    console.log(`   ID: ${venue._id}`);
+    console.log("\n👥 Staff Assignments:");
+    crisisTypes.forEach(c => {
+        const staff = venue.staff_details?.get(c.type);
+        if (staff) {
+            console.log(`   ${c.type.padEnd(14)} → ${staff.name}`);
+        }
+    });
+    console.log(`\n🛎️  Guests: ${venue.guest_details?.length || 0}`);
+    venue.guest_details?.forEach((g: any) => {
+        console.log(`   Room ${g.room_no} → ${g.name} (${g.phoneNumber})`);
+    });
+    console.log("\n══════════════════════════════════════\n");
 
     process.exit(0);
 }

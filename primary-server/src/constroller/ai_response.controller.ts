@@ -27,7 +27,8 @@ export async function sendAiResponseToQueue(req: Request, res: Response): Promis
             venue_details: venue_details.venue,
             crisis_details: crisis_details.crisis,
             confidence_score: aiResponse.confidence_score,
-            status: aiResponse.status
+            status: aiResponse.status,
+            zones: aiResponse.zones
         }
         const redisClient = await redisManagerInstance.getClient();
         if(!redisClient){

@@ -10,6 +10,7 @@ import session from 'express-session';
 import { mongoManagerInstance } from './db/mongo.js';
 import { sendAiResponseToQueue } from './constroller/ai_response.controller.js';
 import { adminDecision } from './constroller/admin.controller.js';
+import { processAiEvidence } from './constroller/ai_process.controller.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -48,6 +49,8 @@ wss.on('connection', (ws: CustomWebSocket, req) => {
 export const activeTimeouts = new Map<string, NodeJS.Timeout>();
 
 app.post('/api/ai/response', sendAiResponseToQueue);
+
+app.post('/api/ai/process', processAiEvidence);
 
 app.post('/api/admin/decision', adminDecision);
 
@@ -101,6 +104,34 @@ async function startServer() {
                 });
             } catch (err) {
                 console.error("Error with pubsub message parsing:", err);
+            }
+        });
+
+        const keyspaceClient = createClient({
+            url: typeof env.REDIS_URL === "string" ? env.REDIS_URL : JSON.stringify(env.REDIS_URL)
+        });
+        await keyspaceClient.connect();
+
+        await keyspaceClient.configSet("notify-keyspace-events", "Ex");
+        await keyspaceClient.subscribe("__keyevent@0__:expired", (key) => {
+            if (typeof key === "string" && key.startsWith("active_crisis:")) {
+                const parts = key.split(":");
+                const venueId = parts[1];
+                const zone = parts[2];
+                const crisisType = parts[3];
+                console.log(`[AUTO-RESOLVE] ${crisisType}@${zone} (venue=${venueId}) — cooldown expired`);
+
+                wss.clients.forEach((client: any) => {
+                    if (client.readyState === WebSocket.OPEN && client.venue_id === venueId) {
+                        client.send(JSON.stringify({
+                            type: "crisis_resolved",
+                            venue_id: venueId,
+                            zone,
+                            crisis_type: crisisType,
+                            message: `${crisisType} crisis in ${zone} has been auto-resolved`,
+                        }));
+                    }
+                });
             }
         });
 

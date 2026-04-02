@@ -18,13 +18,16 @@ const aiResponseSchema = new Schema<ai_response>({
         type: String,
         enum: ['active', 'resolved'],
         default: 'active'
-    }
+    },
+    zones: [{
+        type: String
+    }]
 }, { timestamps: true });
 
 export const crisisSchema = new Schema<crisis>({
     type: {
         type: String,
-        enum: ["fire", "medical", "security", "other"],
+        enum: ["fire", "gas_leak", "earthquake", "security", "water_leak", "air_quality", "other"],
         required: true
     },
     createdAt: {
@@ -99,7 +102,7 @@ export const venueSchema = new Schema<venue>({
     },
     staff_details: {
         type: Map,
-        enum: ["fire", "medical", "security", "other"],
+        enum: ["fire", "gas_leak", "earthquake", "security", "water_leak", "air_quality"],
         of: {
             name: {
                 type: String,
