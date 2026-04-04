@@ -2,6 +2,7 @@ import redis
 import json
 import time
 import os
+import google.generativeai as genai
 from datetime import datetime
 from dotenv import load_dotenv
 from bson import ObjectId
@@ -11,85 +12,68 @@ load_dotenv()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/google-solutions")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
 INPUT_QUEUE = "ai_evidence_queue"
 OUTPUT_QUEUE = "ai_result_queue"
 
+if GOOGLE_API_KEY:
+    genai.configure(api_key=GOOGLE_API_KEY)
+    model = genai.GenerativeModel("gemini-2.5-flash") # Standard stable name
+else:
+    print("[AI WARNING] GOOGLE_API_KEY not found. Gemini classification will fail.")
+    model = None
 
-def classify_crisis(sensors):
-    if sensors.get("smoke_ppm", 0) > 200 or sensors.get("co_ppm", 0) > 50 or sensors.get("flame_detected", False):
-        severity = max(
-            sensors.get("smoke_ppm", 0) / 1000,
-            sensors.get("co_ppm", 0) / 200,
-            0.8 if sensors.get("flame_detected", False) else 0,
-            (sensors.get("temperature_c", 0) - 30) / 100,
-        )
-        return {
-            "crisis_detected": True,
-            "crisis_type": "fire",
-            "confidence_score": round(min(0.95, max(0.5, severity)), 3),
-        }
+# Classifies crisis using Google Gemini AI based on sensors and media evidence
+def classify_with_gemini(evidence):
+    if not model:
+        return {"crisis_detected": False, "error": "Model not initialized"}
 
-    if sensors.get("gas_lpg_ppm", 0) > 200 or sensors.get("gas_methane_ppm", 0) > 100 or (
-        sensors.get("co_ppm", 0) > 80 and not sensors.get("flame_detected", False)
-    ):
-        severity = max(
-            sensors.get("gas_lpg_ppm", 0) / 500,
-            sensors.get("gas_methane_ppm", 0) / 250,
-            sensors.get("co_ppm", 0) / 200,
-        )
-        return {
-            "crisis_detected": True,
-            "crisis_type": "gas_leak",
-            "confidence_score": round(min(0.95, max(0.45, severity)), 3),
-        }
+    sensors = evidence.get("sensors", {})
+    zone = evidence.get("location", {}).get("zone", "unknown")
+    
+    prompt = f"""
+    Analyze these sensor readings and media from a hotel zone: '{zone}'.
+    Sensors: {json.dumps(sensors)}
+    
+    Determine if there is a crisis (fire, gas_leak, earthquake, security, water_leak, air_quality).
+    Respond ONLY with a JSON object:
+    {{
+        "crisis_detected": boolean,
+        "crisis_type": string (one of the above or "other"),
+        "confidence_score": float (0.0 to 1.0),
+        "reasoning": string (brief explanation)
+    }}
+    """
 
-    if sensors.get("vibration_g", 0) > 0.3:
-        severity = sensors.get("vibration_g", 0) / 1.5
-        return {
-            "crisis_detected": True,
-            "crisis_type": "earthquake",
-            "confidence_score": round(min(0.95, max(0.5, severity)), 3),
-        }
+    try:
+        parts = [prompt]
+        
+        # Add photo if available
+        if "media" in evidence and evidence["media"].get("photo"):
+            photo_data = evidence["media"]["photo"]
+            if "," in photo_data:
+                photo_data = photo_data.split(",")[1]
+            parts.append({
+                "mime_type": "image/jpeg",
+                "data": photo_data
+            })
 
-    if sensors.get("motion_detected", False) and sensors.get("sound_db", 0) > 80 and sensors.get("door_open", False):
-        severity = max(
-            (sensors.get("sound_db", 0) - 60) / 50,
-            sensors.get("vibration_g", 0) / 0.5,
-        )
-        return {
-            "crisis_detected": True,
-            "crisis_type": "security",
-            "confidence_score": round(min(0.90, max(0.4, severity)), 3),
-        }
+        response = model.generate_content(parts)
+        
+        # Clean up Markdown formatting from Gemini response
+        text = response.text.strip()
+        if text.startswith("```json"):
+            text = text[7:-3].strip()
+        elif text.startswith("```"):
+            text = text[3:-3].strip()
+            
+        return json.loads(text)
+    except Exception as e:
+        print(f"[AI ERROR] Gemini classification failed: {e}")
+        return {"crisis_detected": False, "error": str(e)}
 
-    if sensors.get("water_level_cm", 0) > 2 or (
-        sensors.get("moisture_detected", False) and sensors.get("humidity_pct", 0) > 85
-    ):
-        severity = max(
-            sensors.get("water_level_cm", 0) / 15,
-            sensors.get("humidity_pct", 0) / 100,
-        )
-        return {
-            "crisis_detected": True,
-            "crisis_type": "water_leak",
-            "confidence_score": round(min(0.90, max(0.45, severity)), 3),
-        }
-
-    if sensors.get("air_quality_index", 0) > 150 or sensors.get("co2_ppm", 0) > 1500:
-        severity = max(
-            sensors.get("air_quality_index", 0) / 350,
-            sensors.get("co2_ppm", 0) / 3000,
-        )
-        return {
-            "crisis_detected": True,
-            "crisis_type": "air_quality",
-            "confidence_score": round(min(0.90, max(0.4, severity)), 3),
-        }
-
-    return {"crisis_detected": False}
-
-
+# Serializes MongoDB BSON types to JSON-friendly formats
 def json_serializer(obj):
     if isinstance(obj, ObjectId):
         return str(obj)
@@ -97,12 +81,13 @@ def json_serializer(obj):
         return obj.isoformat()
     return str(obj)
 
-
+# Retrieves venue and crisis type documents from MongoDB
 def get_venue_and_crisis_details(mongo_db, venue_id, crisis_type):
     venue = None
     crisis = None
     try:
-        venue = mongo_db.venues.find_one({"_id": ObjectId(venue_id)})
+        if venue_id:
+            venue = mongo_db.venues.find_one({"_id": ObjectId(venue_id)})
     except Exception as e:
         print(f"[AI WARN] Failed to lookup venue {venue_id}: {e}")
     try:
@@ -111,49 +96,32 @@ def get_venue_and_crisis_details(mongo_db, venue_id, crisis_type):
         print(f"[AI WARN] Failed to lookup crisis type {crisis_type}: {e}")
     return venue, crisis
 
-
-def format_doc_for_redis(doc):
+# Formats a MongoDB document for JSON serialization
+def format_doc(doc):
     if not doc:
         return None
-    result = {}
-    for k, v in doc.items():
-        if isinstance(v, ObjectId):
-            result[k] = str(v)
-        elif isinstance(v, datetime):
-            result[k] = v.isoformat()
-        elif isinstance(v, dict):
-            result[k] = {dk: str(dv) if isinstance(dv, (ObjectId, datetime)) else dv for dk, dv in v.items()}
-        elif isinstance(v, list):
-            formatted = []
-            for item in v:
-                if isinstance(item, dict):
-                    formatted.append({dk: str(dv) if isinstance(dv, (ObjectId, datetime)) else dv for dk, dv in item.items()})
-                else:
-                    formatted.append(item)
-            result[k] = formatted
-        else:
-            result[k] = v
-    return result
+    return json.loads(json.dumps(doc, default=json_serializer))
 
-
+# Main entry point for the AI worker loop
 def main():
     print(f"Connecting to Redis at {REDIS_URL}...")
-    r = redis.from_url(REDIS_URL, decode_responses=True)
-    r.ping()
-    print("Redis connected")
+    try:
+        r = redis.from_url(REDIS_URL, decode_responses=True)
+        r.ping()
+        print("Redis connected")
+    except Exception as e:
+        print(f"[AI ERROR] Redis failed: {e}")
+        return
 
     print(f"Connecting to MongoDB at {MONGO_URI}...")
-    mongo_client = MongoClient(MONGO_URI)
-    db_name = MONGO_URI.rsplit("/", 1)[-1].split("?")[0]
-    mongo_db = mongo_client[db_name]
-    print(f"MongoDB connected to database: {db_name}")
-
-    venue_count = mongo_db.venues.count_documents({})
-    crisis_count = mongo_db.crisis_types.count_documents({})
-    print(f"Found {venue_count} venues, {crisis_count} crisis types in DB")
-
-    if venue_count == 0 or crisis_count == 0:
-        print("[AI ERROR] No venues or crisis types found. Run seed first!")
+    try:
+        mongo_client = MongoClient(MONGO_URI)
+        db_name = MONGO_URI.rsplit("/", 1)[-1].split("?")[0]
+        mongo_db = mongo_client[db_name]
+        print(f"MongoDB connected to database: {db_name}")
+    except Exception as e:
+        print(f"[AI ERROR] MongoDB failed: {e}")
+        return
 
     print(f"Listening on queue: {INPUT_QUEUE}")
     print("=" * 50)
@@ -170,37 +138,39 @@ def main():
             venue_id = evidence.get("venue_id", "")
             device_id = evidence.get("device_id", "unknown")
             zone = evidence.get("location", {}).get("zone", "unknown")
-            sensors = evidence.get("sensors", {})
 
-            classification = classify_crisis(sensors)
+            print(f"[AI] Processing evidence from {device_id}@{zone}...")
+            classification = classify_with_gemini(evidence)
 
-            if not classification["crisis_detected"]:
-                print(f"[AI] {device_id}@{zone} -> no crisis")
+            if "429" in classification.get("error", ""):
+                print(f"[AI QUOTA] Rate limit hit. Sleeping for 15s to reset quota...")
+                time.sleep(15) # Backoff to stay within free tier limits
+                continue
+
+            if not classification.get("crisis_detected"):
+                print(f"[AI] No crisis detected: {classification.get('reasoning', 'Normal operation')}")
                 continue
 
             crisis_type = classification["crisis_type"]
             confidence = classification["confidence_score"]
+            print(f"[AI] ALERT: {crisis_type} detected with {confidence} confidence")
 
             venue, crisis = get_venue_and_crisis_details(mongo_db, venue_id, crisis_type)
-
-            if not venue:
-                print(f"[AI WARN] Venue not found: {venue_id}")
             if not crisis:
-                print(f"[AI WARN] Crisis type not found: {crisis_type}")
+                print(f"[AI ERROR] Crisis type '{crisis_type}' not found in database. Using 'other'.")
+                _, crisis = get_venue_and_crisis_details(mongo_db, venue_id, "other")
 
-            crisis_oid = crisis["_id"] if crisis else None
-
+            # Store in MongoDB for record keeping
             mongo_db.ai_responses.insert_one({
                 "venue": ObjectId(venue_id) if venue_id else None,
-                "crisis": crisis_oid,
+                "crisis": crisis["_id"] if crisis else None,
                 "confidence_score": confidence,
                 "status": "active",
                 "zones": [zone],
+                "created_at": datetime.utcnow()
             })
 
-            venue_formatted = format_doc_for_redis(venue)
-            crisis_formatted = format_doc_for_redis(crisis)
-
+            # Send result directly to the Worker Server via Redis
             output = {
                 "venue_id": venue_id,
                 "zone": zone,
@@ -209,23 +179,20 @@ def main():
                 "crisis_detected": True,
                 "crisis_type": crisis_type,
                 "confidence_score": confidence,
-                "venue_details": venue_formatted,
-                "crisis_details": crisis_formatted,
+                "venue_details": format_doc(venue),
+                "crisis_details": format_doc(crisis),
+                "status": "active"
             }
 
-            serialized = json.dumps(output, default=json_serializer)
-            r.lpush(OUTPUT_QUEUE, serialized)
-            print(f"[AI] {device_id}@{zone} -> {crisis_type} (confidence={confidence}) -> queued")
+            r.lpush(OUTPUT_QUEUE, json.dumps(output))
+            print(f"[AI] Successfully pushed result to {OUTPUT_QUEUE}")
 
         except KeyboardInterrupt:
             print("\nShutting down AI worker...")
             break
         except Exception as e:
-            print(f"[AI ERROR] {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"[AI ERROR] Unexpected error: {e}")
             time.sleep(1)
-
 
 if __name__ == "__main__":
     main()
