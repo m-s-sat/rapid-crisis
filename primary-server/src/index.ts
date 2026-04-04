@@ -8,7 +8,6 @@ import { WebSocketServer, WebSocket } from 'ws';
 import http from 'http';
 import session from 'express-session';
 import { mongoManagerInstance } from './db/mongo.js';
-import { sendAiResponseToQueue } from './constroller/ai_response.controller.js';
 import { adminDecision } from './constroller/admin.controller.js';
 import { processAiEvidence } from './constroller/ai_process.controller.js';
 
@@ -48,7 +47,7 @@ wss.on('connection', (ws: CustomWebSocket, req) => {
 
 export const activeTimeouts = new Map<string, NodeJS.Timeout>();
 
-app.post('/api/ai/response', sendAiResponseToQueue);
+
 
 app.post('/api/ai/process', processAiEvidence);
 

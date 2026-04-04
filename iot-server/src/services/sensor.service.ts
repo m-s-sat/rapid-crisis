@@ -178,14 +178,16 @@ const SENSOR_GENERATORS: Record<CrisisType, () => SensorSnapshot> = {
     other: ambientSensors,
 };
 
+const DUMMY_PHOTO = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="; // 1x1 black pixel PNG
+
 const PROFILE_WEIGHTS: { profile: CrisisType; weight: number }[] = [
-    { profile: "other", weight: 0.30 },
-    { profile: "fire", weight: 0.15 },
-    { profile: "gas_leak", weight: 0.12 },
-    { profile: "earthquake", weight: 0.10 },
-    { profile: "security", weight: 0.13 },
-    { profile: "water_leak", weight: 0.10 },
-    { profile: "air_quality", weight: 0.10 },
+    // { profile: "other", weight: 0.30 },
+    { profile: "fire", weight: 1.0 },
+    // { profile: "gas_leak", weight: 0.12 },
+    // { profile: "earthquake", weight: 0.10 },
+    // { profile: "security", weight: 0.13 },
+    // { profile: "water_leak", weight: 0.10 },
+    // { profile: "air_quality", weight: 0.10 },
 ];
 
 function pickSensorProfile(): CrisisType {
@@ -254,6 +256,11 @@ export function generateReading(device: DeviceConfig): SensorReading {
             floor: device.floor,
             lat: device.lat,
             lng: device.lng,
+        },
+        media: {
+            photo: DUMMY_PHOTO,
+            video: "",
+            audio: "",
         },
     };
 }

@@ -40,6 +40,7 @@ export interface SensorReading {
         lat: number;
         lng: number;
     };
+    media?: MediaCapture;
 }
 
 export interface CrisisEvidencePayload {

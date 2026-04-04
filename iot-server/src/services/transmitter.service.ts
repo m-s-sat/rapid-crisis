@@ -30,8 +30,9 @@ export async function transmitReading(reading: SensorReading): Promise<void> {
         const data = await res.json() as Record<string, unknown>;
 
         if (res.ok && data.success) {
+            // Logs immediate trend detection result from primary server
             logger.success(
-                `${reading.device_id} → primary-server | crisis_detected=${data.crisis_detected}`
+                `${reading.device_id} → primary-server | trend_detected=${data.crisis_detected} (Full GenAI Pending)`
             );
         } else {
             logger.warn(
