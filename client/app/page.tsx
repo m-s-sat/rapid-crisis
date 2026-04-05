@@ -1,10 +1,24 @@
-import type { Metadata } from "next";
-import { Counter } from "./components/counter/Counter";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useSelector } from "react-redux";
 
 export default function IndexPage() {
-  return <Counter />;
-}
+  const router = useRouter();
+  const accessToken = useSelector((state: any) => state.auth.accessToken);
 
-export const metadata: Metadata = {
-  title: "Redux Toolkit",
-};
+  useEffect(() => {
+    if (accessToken) {
+      router.push("/dashboard");
+    } else {
+      router.push("/login");
+    }
+  }, [accessToken, router]);
+
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0b1326' }}>
+      <div style={{ color: '#b7c4ff', fontSize: '1.5rem', fontWeight: 'bold' }}>Sentinel Command...</div>
+    </div>
+  );
+}

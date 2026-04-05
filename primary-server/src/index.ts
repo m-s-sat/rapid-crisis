@@ -8,8 +8,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import http from 'http';
 import session from 'express-session';
 import { mongoManagerInstance } from './db/mongo.js';
-import { adminDecision } from './constroller/admin.controller.js';
-import { processAiEvidence } from './constroller/ai_process.controller.js';
+import mainRouter from './routes/index.js';
 
 const app = express();
 const server = http.createServer(app);
@@ -49,9 +48,7 @@ export const activeTimeouts = new Map<string, NodeJS.Timeout>();
 
 
 
-app.post('/api/ai/process', processAiEvidence);
-
-app.post('/api/admin/decision', adminDecision);
+app.use('/api', mainRouter);
 
 async function startServer() {
     try {
@@ -103,6 +100,22 @@ async function startServer() {
                 });
             } catch (err) {
                 console.error("Error with pubsub message parsing:", err);
+            }
+        });
+
+        await subscriberClient.subscribe('sensor_data', (message) => {
+            try {
+                const parsed = JSON.parse(message);
+                wss.clients.forEach((client: any) => {
+                    if (client.readyState === WebSocket.OPEN && client.venue_id === parsed.venue_id) {
+                        client.send(JSON.stringify({
+                            type: 'sensor_data',
+                            payload: parsed.payload
+                        }));
+                    }
+                });
+            } catch (err) {
+                console.error("Error with sensor_data pubsub:", err);
             }
         });
 
