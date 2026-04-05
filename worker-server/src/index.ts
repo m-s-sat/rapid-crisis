@@ -8,6 +8,7 @@ import {
     markSmsSent,
     markAdminNotified,
 } from "./services/dedup.service.js";
+import { generateBody } from "./services/messaging.service.js";
 
 const twilioClient = env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN
     ? twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN)
@@ -29,13 +30,12 @@ async function sendSms(to: string, body: string) {
     }
 }
 
-async function sendAlerts(venue: any, crisis: any, redisClient: any) {
-    const body = `CRITICAL ALERT: A ${crisis.type} crisis has been confirmed at ${venue.name}. Please follow emergency procedures.`;
-
+async function sendAlerts(venue: any, crisis: any, zone: string, redisClient: any) {
     if (venue.guest_details && Array.isArray(venue.guest_details)) {
+        const guestBody = generateBody(venue.name, zone, crisis.type, "guest", crisis.safety_measures, crisis.description);
         for (const guest of venue.guest_details) {
             if (guest.phoneNumber) {
-                await sendSms(guest.phoneNumber, body);
+                await sendSms(guest.phoneNumber, guestBody);
             }
         }
     }
@@ -44,7 +44,9 @@ async function sendAlerts(venue: any, crisis: any, redisClient: any) {
         const staffList = Object.values(venue.staff_details);
         for (const staff of staffList) {
             const s = staff as any;
-            if (s.phoneNumber) {
+            if (s.phoneNumber && (s.expertise === "all" || s.expertise === crisis.type)) {
+                const role = s.expertise === "all" ? "admin" : "staff";
+                const body = generateBody(venue.name, zone, crisis.type, role, crisis.safety_measures, crisis.description);
                 await sendSms(s.phoneNumber, body);
             }
         }
@@ -58,7 +60,7 @@ async function sendAlerts(venue: any, crisis: any, redisClient: any) {
 }
 
 async function handleAdminApproved(payload: any, redisClient: any) {
-    await sendAlerts(payload.venue_details, payload.crisis_details, redisClient);
+    await sendAlerts(payload.venue_details, payload.crisis_details, payload.zone || "unknown", redisClient);
 }
 
 async function handleAiResult(result: any, redisClient: any) {
@@ -83,10 +85,15 @@ async function handleAiResult(result: any, redisClient: any) {
             `peak=${updated.peak_confidence} | sms_sent=${updated.sms_sent}`
         );
 
-        if (updated.peak_confidence >= 0.70 && !updated.sms_sent && venueDetails && crisisDetails) {
-            console.log(`[ESCALATION] ${crisisType}@${zone} crossed 0.70 threshold`);
-            await sendAlerts(venueDetails, crisisDetails, redisClient);
-            await markSmsSent(redisClient, venueId, zone, crisisType);
+        if (updated.peak_confidence >= 0.70 && !updated.sms_sent) {
+            if (venueDetails) {
+                console.log(`[ESCALATION] ${crisisType}@${zone} crossed 0.70 threshold. Sending alerts.`);
+                const mappedCrisis = crisisDetails || { type: crisisType };
+                await sendAlerts(venueDetails, mappedCrisis, zone, redisClient);
+                await markSmsSent(redisClient, venueId, zone, crisisType);
+            } else {
+                console.warn(`[SKIP-SMS] ${crisisType}@${zone}: No venueDetails found for ${venueId}. Is the database seeded?`);
+            }
         }
 
         return;
@@ -97,7 +104,7 @@ async function handleAiResult(result: any, redisClient: any) {
 
     if (confidence >= 0.70) {
         if (venueDetails && crisisDetails) {
-            await sendAlerts(venueDetails, crisisDetails, redisClient);
+            await sendAlerts(venueDetails, crisisDetails, zone, redisClient);
             await markSmsSent(redisClient, venueId, zone, crisisType);
         }
     } else if (confidence >= 0.40) {

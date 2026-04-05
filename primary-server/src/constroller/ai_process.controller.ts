@@ -45,13 +45,22 @@ export async function processAiEvidence(req: Request, res: Response): Promise<an
             }));
         }
 
-        // Queue for AI processing and respond with trend detection as a preliminary crisis flag
-        await redisClient.lPush("ai_evidence_queue", JSON.stringify(payload));
+        // CRITICAL OPTIMIZATION: Only queue for expensive AI analysis if triggers are met
+        const s = payload.sensors;
+        const isSpiking = s.smoke_ppm > 40 || s.temperature_c > 45 || s.flame_detected || s.gas_lpg_ppm > 50 || s.water_level_cm > 5;
+        const hasTrend = trends.length > 0;
+
+        if (isSpiking || hasTrend) {
+            console.log(`[AI-TRIGGER] ${payload.location.zone}: Sensor spike or trend detected. Queueing for AWS Bedrock analysis.`);
+            await redisClient.lPush("ai_evidence_queue", JSON.stringify(payload));
+        } else {
+            console.log(`[AI-FILTER] ${payload.location.zone}: Normal readings. Skipping AI analysis to save credits.`);
+        }
 
         return res.status(202).json({
             success: true,
-            message: "Evidence queued for AI processing",
-            crisis_detected: trends.length > 0 // Map trends to crisis_detected for immediate IoT feedback
+            message: (isSpiking || hasTrend) ? "Evidence queued for expensive AI analysis" : "Evidence logged (AI analysis skipped for normal values)",
+            crisis_detected: (isSpiking || hasTrend)
         });
     } catch (err: any) {
         console.error("AI Process Controller Error:", err);

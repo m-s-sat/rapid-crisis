@@ -1,7 +1,13 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { env } from "../config/env.js";
 import { Venue } from "../db/mongo.js";
 import { logger } from "../utils/logger.js";
 import type { CrisisType, DeviceConfig, SensorReading, SensorSnapshot } from "../types/sensor.types.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const ZONES = ["lobby", "kitchen", "hallway", "server_room", "parking_garage", "storage", "ballroom", "pool_deck"];
 const FLOORS = [0, 1, 2, 3, 4, 5];
@@ -178,16 +184,22 @@ const SENSOR_GENERATORS: Record<CrisisType, () => SensorSnapshot> = {
     other: ambientSensors,
 };
 
-const DUMMY_PHOTO = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="; // 1x1 black pixel PNG
+const PHOTO_FILE_PATH = path.join(__dirname, "../../../ai/fire_crisis_scene_base64_with_prefix.txt");
+let DUMMY_PHOTO = "";
+
+try {
+    if (fs.existsSync(PHOTO_FILE_PATH)) {
+        DUMMY_PHOTO = fs.readFileSync(PHOTO_FILE_PATH, "utf8").trim();
+        logger.info(`Successfully loaded high-res photo from ${PHOTO_FILE_PATH} (${(DUMMY_PHOTO.length / 1024 / 1024).toFixed(2)} MB)`);
+    } else {
+        logger.warn(`Photo file not found at ${PHOTO_FILE_PATH}. Using empty string.`);
+    }
+} catch (err: any) {
+    logger.error(`Error reading high-res photo: ${err.message}`);
+}
 
 const PROFILE_WEIGHTS: { profile: CrisisType; weight: number }[] = [
-    // { profile: "other", weight: 0.30 },
     { profile: "fire", weight: 1.0 },
-    // { profile: "gas_leak", weight: 0.12 },
-    // { profile: "earthquake", weight: 0.10 },
-    // { profile: "security", weight: 0.13 },
-    // { profile: "water_leak", weight: 0.10 },
-    // { profile: "air_quality", weight: 0.10 },
 ];
 
 function pickSensorProfile(): CrisisType {
@@ -236,12 +248,12 @@ export function getVenueId(): string {
     return venueId;
 }
 
-export function generateReading(device: DeviceConfig): SensorReading {
+export function generateReading(device: DeviceConfig): { reading: SensorReading; profile: CrisisType } {
     const profile = pickSensorProfile();
     const sensors = SENSOR_GENERATORS[profile]();
     const bootTime = deviceUptimes.get(device.device_id) || Date.now();
 
-    return {
+    const reading: SensorReading = {
         device_id: device.device_id,
         device_mac: device.device_mac,
         firmware_version: FIRMWARE_VERSIONS[Math.floor(Math.random() * FIRMWARE_VERSIONS.length)]!,
@@ -263,4 +275,6 @@ export function generateReading(device: DeviceConfig): SensorReading {
             audio: "",
         },
     };
+
+    return { reading, profile };
 }

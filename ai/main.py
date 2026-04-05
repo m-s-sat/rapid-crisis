@@ -2,7 +2,8 @@ import redis
 import json
 import time
 import os
-import google.generativeai as genai
+import boto3
+import base64
 from datetime import datetime
 from dotenv import load_dotenv
 from bson import ObjectId
@@ -12,27 +13,42 @@ load_dotenv()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/google-solutions")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+
+# AWS Bedrock Config
+AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+AWS_MODEL_ID = os.getenv("AWS_MODEL_ID", "amazon.nova-lite-v1:0")
 
 INPUT_QUEUE = "ai_evidence_queue"
 OUTPUT_QUEUE = "ai_result_queue"
 
-if GOOGLE_API_KEY:
-    genai.configure(api_key=GOOGLE_API_KEY)
-    model = genai.GenerativeModel("gemini-2.5-flash") # Standard stable name
+# Initialize Bedrock Client
+bedrock_client = None
+if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
+    try:
+        bedrock_client = boto3.client(
+            service_name='bedrock-runtime',
+            region_name=AWS_REGION,
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY
+        )
+        print(f"[AI] Connected to AWS Bedrock ({AWS_REGION}) using Universal Converse API")
+        print(f"[AI] Active Model: {AWS_MODEL_ID}")
+    except Exception as e:
+        print(f"[AI ERROR] Failed to initialize Bedrock client: {e}")
 else:
-    print("[AI WARNING] GOOGLE_API_KEY not found. Gemini classification will fail.")
-    model = None
+    print("[AI WARNING] AWS credentials not found. Bedrock classification will fail.")
 
-# Classifies crisis using Google Gemini AI based on sensors and media evidence
-def classify_with_gemini(evidence):
-    if not model:
-        return {"crisis_detected": False, "error": "Model not initialized"}
+# Classifies crisis using the Bedrock Universal Converse API (Compatible with Nova and Claude)
+def classify_with_ai(evidence):
+    if not bedrock_client:
+        return {"crisis_detected": False, "error": "AWS Bedrock client not initialized"}
 
     sensors = evidence.get("sensors", {})
     zone = evidence.get("location", {}).get("zone", "unknown")
     
-    prompt = f"""
+    prompt_text = f"""
     Analyze these sensor readings and media from a hotel zone: '{zone}'.
     Sensors: {json.dumps(sensors)}
     
@@ -46,31 +62,62 @@ def classify_with_gemini(evidence):
     }}
     """
 
-    try:
-        parts = [prompt]
-        
-        # Add photo if available
-        if "media" in evidence and evidence["media"].get("photo"):
-            photo_data = evidence["media"]["photo"]
-            if "," in photo_data:
-                photo_data = photo_data.split(",")[1]
-            parts.append({
-                "mime_type": "image/jpeg",
-                "data": photo_data
-            })
+    content = [{"text": prompt_text}]
 
-        response = model.generate_content(parts)
+    # Process base64 image (DISABLED FOR NOW)
+    # if "media" in evidence and evidence["media"].get("photo"):
+    #     raw_photo = str(evidence["media"]["photo"]).strip()
+    #     
+    #     # Robustly strip prefix if present (e.g. data:image/png;base64,)
+    #     if "," in raw_photo:
+    #         photo_data = raw_photo.split(",")[1]
+    #     else:
+    #         photo_data = raw_photo
+    #         
+    #     try:
+    #         # Bedrock Converse API wants raw bytes
+    #         image_bytes = base64.b64decode(photo_data)
+    #         
+    #         # Detect format by sniffing headers
+    #         if photo_data.startswith("iVBOR"):
+    #             mime_format = "png"
+    #         elif photo_data.startswith("/9j/"):
+    #             mime_format = "jpeg"
+    #         elif photo_data.startswith("UklGR"):
+    #             mime_format = "webp"
+    #         else:
+    #             mime_format = "png" # Default fallback
+    #         
+    #         content.append({
+    #             "image": {
+    #                 "format": mime_format,
+    #                 "source": {"bytes": image_bytes}
+    #             }
+    #         })
+    #     except Exception as e:
+    #         print(f"[AI ERROR] Base64 image decoding failed: {e}")
+
+    try:
+        response = bedrock_client.converse(
+            modelId=AWS_MODEL_ID,
+            messages=[{"role": "user", "content": content}],
+            inferenceConfig={
+                "maxTokens": 1000,
+                "temperature": 0.1
+            }
+        )
         
-        # Clean up Markdown formatting from Gemini response
-        text = response.text.strip()
-        if text.startswith("```json"):
-            text = text[7:-3].strip()
-        elif text.startswith("```"):
-            text = text[3:-3].strip()
+        raw_text = response['output']['message']['content'][0]['text'].strip()
+        
+        # Clean Markdown
+        if raw_text.startswith("```json"):
+            raw_text = raw_text[7:-3].strip()
+        elif raw_text.startswith("```"):
+            raw_text = raw_text[3:-3].strip()
             
-        return json.loads(text)
+        return json.loads(raw_text)
     except Exception as e:
-        print(f"[AI ERROR] Gemini classification failed: {e}")
+        print(f"[AI ERROR] Bedrock classification failed: {e}")
         return {"crisis_detected": False, "error": str(e)}
 
 # Serializes MongoDB BSON types to JSON-friendly formats
@@ -139,28 +186,24 @@ def main():
             device_id = evidence.get("device_id", "unknown")
             zone = evidence.get("location", {}).get("zone", "unknown")
 
-            print(f"[AI] Processing evidence from {device_id}@{zone}...")
-            classification = classify_with_gemini(evidence)
-
-            if "429" in classification.get("error", ""):
-                print(f"[AI QUOTA] Rate limit hit. Sleeping for 15s to reset quota...")
-                time.sleep(15) # Backoff to stay within free tier limits
-                continue
+            print(f"[AI] Analyzing {device_id}@{zone} via {AWS_MODEL_ID}...")
+            classification = classify_with_ai(evidence)
 
             if not classification.get("crisis_detected"):
-                print(f"[AI] No crisis detected: {classification.get('reasoning', 'Normal operation')}")
+                reason = classification.get('reasoning', 'Normal operation')
+                print(f"[AI] No crisis: {reason}")
                 continue
 
             crisis_type = classification["crisis_type"]
             confidence = classification["confidence_score"]
-            print(f"[AI] ALERT: {crisis_type} detected with {confidence} confidence")
+            print(f"[AI] ALERT: {crisis_type} detected ({confidence*100}%)")
 
             venue, crisis = get_venue_and_crisis_details(mongo_db, venue_id, crisis_type)
             if not crisis:
-                print(f"[AI ERROR] Crisis type '{crisis_type}' not found in database. Using 'other'.")
+                print(f"[AI ERROR] Unknown crisis type '{crisis_type}'. Using 'other'.")
                 _, crisis = get_venue_and_crisis_details(mongo_db, venue_id, "other")
 
-            # Store in MongoDB for record keeping
+            # Store in MongoDB
             mongo_db.ai_responses.insert_one({
                 "venue": ObjectId(venue_id) if venue_id else None,
                 "crisis": crisis["_id"] if crisis else None,
@@ -170,7 +213,6 @@ def main():
                 "created_at": datetime.utcnow()
             })
 
-            # Send result directly to the Worker Server via Redis
             output = {
                 "venue_id": venue_id,
                 "zone": zone,
@@ -185,13 +227,13 @@ def main():
             }
 
             r.lpush(OUTPUT_QUEUE, json.dumps(output))
-            print(f"[AI] Successfully pushed result to {OUTPUT_QUEUE}")
+            print(f"[AI] Crisis Pushed to Result Queue!")
 
         except KeyboardInterrupt:
             print("\nShutting down AI worker...")
             break
         except Exception as e:
-            print(f"[AI ERROR] Unexpected error: {e}")
+            print(f"[AI ERROR] Loop error: {e}")
             time.sleep(1)
 
 if __name__ == "__main__":
