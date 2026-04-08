@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { env } from "../config/env.js";
-import { Venue } from "../db/mongo.js";
+import { Venue, Admin } from "../db/mongo.js";
 import { logger } from "../utils/logger.js";
 import type { CrisisType, DeviceConfig, SensorReading, SensorSnapshot } from "../types/sensor.types.js";
 
@@ -212,18 +212,32 @@ function pickSensorProfile(): CrisisType {
     return "other";
 }
 
+import { setPauseVenueId } from "./redis_listener.service.js";
+
+
+
 let venueId: string = "";
 
 export async function fetchVenueFromDb() {
     try {
-        const venue = await Venue.findOne({});
-        if (venue) {
-            venueId = venue._id.toString();
+        const admin = await Admin.findOne({});
+        if (admin && admin.venue_id) {
+            venueId = admin.venue_id.toString();
+            setPauseVenueId(venueId);
+            logger.info(`Locked IoT Sandbox to venue_id: ${venueId} (via Admin Account ${admin.email || admin.name || 'Unknown'})`);
         } else {
-            logger.warn("No venue found in DB");
+            logger.warn("No admin found. Falling back to naive venue discovery...");
+            const venue = await Venue.findOne({});
+            if (venue) {
+                venueId = venue._id.toString();
+                setPauseVenueId(venueId);
+                logger.info(`Latched onto naive venue_id: ${venueId}`);
+            } else {
+                logger.warn("No venue or admin found in DB");
+            }
         }
     } catch (err: any) {
-        logger.error("Failed to fetch venue from DB: " + err.message);
+        logger.error("Failed to fetch primary configuration from DB: " + err.message);
     }
 }
 

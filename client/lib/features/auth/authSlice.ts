@@ -2,24 +2,20 @@ import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 import { getCookie, setCookie, removeCookie } from "../../utils/cookies";
 
 interface AuthState {
-  accessToken: string | null;
-  refreshToken: string | null;
   admin: { name: string; email: string } | null;
   venue_id: string | null;
+  accessToken: string | null;
+  isLoading: boolean;
 }
 
 // Helper to safely access storage in Next.js
 const getStoredAuth = () => {
   if (typeof window === "undefined") return null;
   
-  const accessToken = getCookie("sentinel_access_token");
-  const refreshToken = getCookie("sentinel_refresh_token");
   const storedUser = localStorage.getItem("sentinel_user");
   const user = storedUser ? JSON.parse(storedUser) : null;
 
   return {
-    accessToken,
-    refreshToken,
     admin: user?.admin || null,
     venue_id: user?.venue_id || null,
   };
@@ -28,10 +24,10 @@ const getStoredAuth = () => {
 const stored = getStoredAuth();
 
 const initialState: AuthState = {
-  accessToken: stored?.accessToken || null,
-  refreshToken: stored?.refreshToken || null,
   admin: stored?.admin || null,
   venue_id: stored?.venue_id || null,
+  accessToken: null, // Keep in memory only
+  isLoading: true,
 };
 
 const authSlice = createSlice({
@@ -40,43 +36,33 @@ const authSlice = createSlice({
   reducers: {
     setCredentials: (
       state,
-      action: PayloadAction<{ accessToken: string; refreshToken: string; admin: any; venue_id: string }>
+      action: PayloadAction<{ admin: any; venue_id: string; accessToken: string }>
     ) => {
-      const { accessToken, refreshToken, admin, venue_id } = action.payload;
-      state.accessToken = accessToken;
-      state.refreshToken = refreshToken;
+      const { admin, venue_id, accessToken } = action.payload;
       state.admin = admin;
       state.venue_id = venue_id;
+      state.accessToken = accessToken;
+      state.isLoading = false;
       
       if (typeof window !== "undefined") {
-        setCookie("sentinel_access_token", accessToken);
-        setCookie("sentinel_refresh_token", refreshToken);
         localStorage.setItem("sentinel_user", JSON.stringify({ admin, venue_id }));
       }
     },
-    setTokens: (state, action: PayloadAction<{ accessToken: string; refreshToken: string }>) => {
-      state.accessToken = action.payload.accessToken;
-      state.refreshToken = action.payload.refreshToken;
-      
-      if (typeof window !== "undefined") {
-        setCookie("sentinel_access_token", action.payload.accessToken);
-        setCookie("sentinel_refresh_token", action.payload.refreshToken);
-      }
+    setLoading: (state, action: PayloadAction<boolean>) => {
+      state.isLoading = action.payload;
     },
     logout: (state) => {
-      state.accessToken = null;
-      state.refreshToken = null;
       state.admin = null;
       state.venue_id = null;
+      state.accessToken = null;
+      state.isLoading = false;
       
       if (typeof window !== "undefined") {
-        removeCookie("sentinel_access_token");
-        removeCookie("sentinel_refresh_token");
         localStorage.removeItem("sentinel_user");
       }
     },
   },
 });
 
-export const { setCredentials, setTokens, logout } = authSlice.actions;
+export const { setCredentials, setLoading, logout } = authSlice.actions;
 export default authSlice;

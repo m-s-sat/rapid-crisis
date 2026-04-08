@@ -14,7 +14,7 @@ const AdminSchema: Schema = new Schema({
     email: { type: String, required: true, unique: true },
     password_hash: { type: String, required: true },
     venue_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Venue', required: true },
-    refresh_token: { type: String },
+    refresh_token: { type: String, select: false },
     created_at: { type: Date, default: Date.now }
 });
 

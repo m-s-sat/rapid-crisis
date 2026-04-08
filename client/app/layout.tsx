@@ -1,3 +1,4 @@
+import Script from "next/script";
 import { ReactNode } from "react";
 import { AppLayout } from "./components/AppLayout";
 import "./styles/globals.css";
@@ -10,7 +11,9 @@ export default function RootLayout({ children }: Props) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <script
+        <Script
+          id="theme-initializer"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {
@@ -23,7 +26,7 @@ export default function RootLayout({ children }: Props) {
           }}
         />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         <AppLayout>{children}</AppLayout>
       </body>
     </html>

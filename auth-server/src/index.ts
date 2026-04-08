@@ -1,15 +1,33 @@
 import express from 'express';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import helmet from 'helmet';
+import { rateLimit } from 'express-rate-limit';
 import { env } from './config/env.js';
 import { mongoManagerInstance } from './db/mongo.js';
 import authRoutes from './routes/auth.routes.js';
 
 const app = express();
 
+// Security Headers
+app.use(helmet());
+
+// Global Rate Limiter for general traffic
+const globalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    message: { message: "Too many requests from this IP, please try again later." },
+});
+app.use(globalLimiter);
+
 app.use(express.json());
+app.use(cookieParser());
 app.use(morgan('dev'));
-app.use(cors());
+app.use(cors({
+    origin: env.FRONTEND_URL,
+    credentials: true
+}));
 
 app.use('/api/auth', authRoutes);
 

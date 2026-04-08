@@ -27,6 +27,10 @@ export async function adminDecision(req: Request, res: Response): Promise<any> {
             await redisClient.lPush("admin_approved", JSON.stringify(payload));
             return res.json({ success: true, message: "Admin approved. Tasks pushed." });
         } else if (action === 'cancel') {
+            const redisClient = await redisManagerInstance.getClient();
+            if (redisClient) {
+                await redisClient.publish("messaging_status", JSON.stringify({ type: "resume" }));
+            }
             return res.json({ success: true, message: "Admin safely cancelled the alert." });
         } else {
             return res.status(400).json({ success: false, message: "Invalid action. Use approve or cancel." });

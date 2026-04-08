@@ -71,7 +71,12 @@ async function handleAiResult(result: any, redisClient: any) {
     const crisisType = result.crisis_type;
     const confidence = result.confidence_score ?? 0;
     const venueDetails = result.venue_details;
-    const crisisDetails = result.crisis_details;
+    const crisisDetails = result.crisis_details || {
+        _id: "fallback_" + crisisType,
+        type: crisisType,
+        safety_measures: ["System triggered manual override. Please investigate."],
+        description: "Unmapped structural detection.",
+    };
     const mongoResponseId = result.mongo_response_id || "";
 
     const existing = await getActiveSession(redisClient, venueId, zone, crisisType);
@@ -94,6 +99,21 @@ async function handleAiResult(result: any, redisClient: any) {
             } else {
                 console.warn(`[SKIP-SMS] ${crisisType}@${zone}: No venueDetails found for ${venueId}. Is the database seeded?`);
             }
+        } else if (updated.peak_confidence >= 0.40 && !updated.admin_notified) {
+            await redisClient.publish("messaging_status", JSON.stringify({
+                type: "decided_by_admin",
+                venue_id: venueId,
+                payload: {
+                    venue_details: venueDetails,
+                    crisis_details: crisisDetails,
+                    confidence_score: updated.peak_confidence,
+                    status: "active",
+                    zones: [zone],
+                    crisis_type: crisisType,
+                    crisis_session_id: updated.crisis_session_id,
+                },
+            }));
+            await markAdminNotified(redisClient, venueId, zone, crisisType);
         }
 
         return;
@@ -117,6 +137,7 @@ async function handleAiResult(result: any, redisClient: any) {
                 confidence_score: confidence,
                 status: "active",
                 zones: [zone],
+                crisis_type: crisisType,
                 crisis_session_id: session.crisis_session_id,
             },
         }));

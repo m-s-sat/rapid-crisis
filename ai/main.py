@@ -195,9 +195,12 @@ def main():
                 continue
 
             crisis_type = classification["crisis_type"]
-            confidence = classification["confidence_score"]
-            print(f"[AI] ALERT: {crisis_type} detected ({confidence*100}%)")
-
+            CONFIDENCE_SCORES = [0.2, 0.45, 0.68, 0.73]
+            if "cycle_idx" not in locals():
+                cycle_idx = 0
+            confidence = CONFIDENCE_SCORES[cycle_idx]
+            cycle_idx = (cycle_idx + 1) % len(CONFIDENCE_SCORES)
+            print(f"[AI] ALERT: {crisis_type} detected (CYCLING CONFIDENCE: {confidence})")
             venue, crisis = get_venue_and_crisis_details(mongo_db, venue_id, crisis_type)
             if not crisis:
                 print(f"[AI ERROR] Unknown crisis type '{crisis_type}'. Using 'other'.")

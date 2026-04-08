@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useSelector } from "react-redux";
 import { useRouter } from "next/navigation";
 import { MonitoringGrid } from "../components/MonitoringGrid";
 
 export default function Dashboard() {
+  const [mounted, setMounted] = useState(false);
   const auth = useSelector((state: any) => state.auth);
   const router = useRouter();
 
   useEffect(() => {
+    setMounted(true);
     if (!auth.accessToken) {
       router.push("/login");
     }
@@ -23,7 +25,7 @@ export default function Dashboard() {
             COMMAND CENTER
           </h1>
           <p style={{ color: 'var(--text-secondary)', letterSpacing: '0.1em' }}>
-            NODE: {auth.venue_id?.toUpperCase() || 'OFFLINE'} | SECTOR: ALPHA-1
+            NODE: {mounted ? (auth.venue_id?.toUpperCase() || 'OFFLINE') : '...'} | SECTOR: ALPHA-1
           </p>
         </div>
         <div className="glass pulse" style={{ padding: '10px 20px', borderRadius: '40px', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: '700', border: '1px solid rgba(183, 196, 255, 0.3)' }}>

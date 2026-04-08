@@ -3,13 +3,25 @@
 import { useMonitor } from "../hooks/useMonitor";
 
 export const MonitoringGrid = () => {
-  const { sensorData, activeCrisis, messages } = useMonitor();
+  const { sensorData, activeCrisis, messages, handleAdminDecision } = useMonitor();
 
+  const sensors = sensorData?.sensors;
   const sensorStats = [
-    { label: "Temperature", value: sensorData?.temperature ? `${sensorData.temperature.toFixed(1)}°C` : "--", color: "#60a5fa" },
-    { label: "Smoke Level", value: sensorData?.smoke_level ? `${(sensorData.smoke_level * 100).toFixed(0)}%` : "--", color: "#f87171" },
-    { label: "Water Level", value: sensorData?.water_level ? `${(sensorData.water_level * 100).toFixed(0)}%` : "--", color: "#34d399" },
-    { label: "Presence", value: sensorData?.presence_detected ? "DETECTED" : "NONE", color: "#fbbf24" },
+    { label: "Temperature", value: sensors?.temperature_c !== undefined ? `${sensors.temperature_c.toFixed(1)}°C` : "--", color: "#60a5fa" },
+    { label: "Humidity", value: sensors?.humidity_pct !== undefined ? `${sensors.humidity_pct.toFixed(1)}%` : "--", color: "#818cf8" },
+    { label: "Smoke Level", value: sensors?.smoke_ppm !== undefined ? `${sensors.smoke_ppm.toFixed(0)} ppm` : "--", color: "#f87171" },
+    { label: "Air Quality (AQI)", value: sensors?.air_quality_index !== undefined ? `${sensors.air_quality_index.toFixed(0)}` : "--", color: "#a78bfa" },
+    { label: "CO2 Level", value: sensors?.co2_ppm !== undefined ? `${sensors.co2_ppm.toFixed(0)} ppm` : "--", color: "#fb923c" },
+    { label: "CO Level", value: sensors?.co_ppm !== undefined ? `${sensors.co_ppm.toFixed(1)} ppm` : "--", color: "#f43f5e" },
+    { label: "Gas LPG", value: sensors?.gas_lpg_ppm !== undefined ? `${sensors.gas_lpg_ppm.toFixed(1)} ppm` : "--", color: "#ea580c" },
+    { label: "Gas Methane", value: sensors?.gas_methane_ppm !== undefined ? `${sensors.gas_methane_ppm.toFixed(1)} ppm` : "--", color: "#d97706" },
+    { label: "Sound Level", value: sensors?.sound_db !== undefined ? `${sensors.sound_db.toFixed(1)} dB` : "--", color: "#2dd4bf" },
+    { label: "Vibration", value: sensors?.vibration_g !== undefined ? `${sensors.vibration_g.toFixed(2)} g` : "--", color: "#eab308" },
+    { label: "Water Level", value: sensors?.water_level_cm !== undefined ? `${sensors.water_level_cm.toFixed(1)} cm` : "--", color: "#34d399" },
+    { label: "Presence", value: sensors?.motion_detected ? "DETECTED" : "NONE", color: sensors?.motion_detected ? "#fbbf24" : "var(--text-secondary)" },
+    { label: "Flame Detected", value: sensors?.flame_detected ? "WARN" : "SAFE", color: sensors?.flame_detected ? "#ef4444" : "var(--text-secondary)" },
+    { label: "Moisture", value: sensors?.moisture_detected ? "WARN" : "SAFE", color: sensors?.moisture_detected ? "#3b82f6" : "var(--text-secondary)" },
+    { label: "Door Status", value: sensors?.door_open ? "OPEN" : "CLOSED", color: sensors?.door_open ? "#fbbf24" : "var(--text-secondary)" },
   ];
 
   return (
@@ -18,9 +30,9 @@ export const MonitoringGrid = () => {
         {/* Sensor Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
           {sensorStats.map((stat, i) => (
-            <div key={i} className="command-card glass" style={{ textAlign: 'center', padding: '2rem' }}>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', marginBottom: '1rem' }}>{stat.label}</p>
-              <h2 style={{ color: stat.color, fontSize: '2rem', fontWeight: 'bold' }}>{stat.value}</h2>
+            <div key={i} className="command-card glass" style={{ textAlign: 'center', padding: '1.5rem 1rem' }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{stat.label}</p>
+              <h2 style={{ color: stat.color, fontSize: '1.4rem', fontWeight: 'bold' }}>{stat.value}</h2>
             </div>
           ))}
         </div>
@@ -33,13 +45,13 @@ export const MonitoringGrid = () => {
             padding: '2rem',
             animation: 'pulse 2s infinite ease-in-out'
           }}>
-            <h1 style={{ color: '#ef4444', marginBottom: '0.5rem' }}>CRISIS DETECTED: {activeCrisis.crisis_type}</h1>
-            <p style={{ color: 'var(--text-primary)' }}>Zone: {activeCrisis.zone} | Confidence: {(activeCrisis.confidence_score * 100).toFixed(0)}%</p>
+            <h1 style={{ color: '#ef4444', marginBottom: '0.5rem' }}>CRISIS DETECTED: {activeCrisis.crisis_type || (activeCrisis.crisis_details ? activeCrisis.crisis_details.type : "Unknown")}</h1>
+            <p style={{ color: 'var(--text-primary)' }}>Zone: {activeCrisis.zone || (activeCrisis.zones ? activeCrisis.zones[0] : "unknown")} | Confidence: {(activeCrisis.confidence_score * 100).toFixed(0)}%</p>
             <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
               {activeCrisis.confidence_score < 0.7 && (
                 <>
-                   <button className="btn-primary" style={{ background: '#ef4444', color: '#fff' }}>ACTIVATE PROTOCOL</button>
-                   <button className="btn-ghost">FALSE ALARM</button>
+                   <button className="btn-primary" style={{ background: '#ef4444', color: '#fff' }} onClick={() => handleAdminDecision('approve', activeCrisis)}>ACTIVATE PROTOCOL</button>
+                   <button className="btn-ghost" onClick={() => handleAdminDecision('cancel', activeCrisis)}>FALSE ALARM</button>
                 </>
               )}
             </div>

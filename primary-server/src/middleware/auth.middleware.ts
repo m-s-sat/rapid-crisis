@@ -3,8 +3,8 @@ import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 
 export const verifyToken = (req: Request, res: Response, next: NextFunction): any => {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
+    // Check both cookie and header for backwards compatibility during migration
+    const token = req.cookies?.accessToken || (req.headers.authorization && req.headers.authorization.split(' ')[1]);
 
     if (!token) return res.status(401).json({ message: "Unauthorized" });
 

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLoginMutation } from "../../lib/features/auth/authApiSlice";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { setCredentials } from "../../lib/features/auth/authSlice";
 import { useRouter } from "next/navigation";
 
@@ -13,6 +13,15 @@ export default function Login() {
   const [login, { isLoading, error }] = useLoginMutation();
   const dispatch = useDispatch();
   const router = useRouter();
+  
+  const accessToken = useSelector((state: any) => state.auth.accessToken);
+  const authLoading = useSelector((state: any) => state.auth.isLoading);
+
+  useEffect(() => {
+    if (accessToken) {
+      router.push("/dashboard");
+    }
+  }, [accessToken, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,9 +30,17 @@ export default function Login() {
       dispatch(setCredentials(result));
       router.push("/dashboard");
     } catch (err) {
-      console.error(err);
+      // RTK Query errors handled via 'error' state variable
     }
   };
+
+  if (authLoading || accessToken) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 'calc(100vh - 150px)', padding: '2rem' }}>
+        <div style={{ color: 'var(--primary)', fontStyle: 'italic' }}>Verifying authorization...</div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 'calc(100vh - 150px)', padding: '2rem' }}>

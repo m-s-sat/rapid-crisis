@@ -5,21 +5,22 @@ import { logger } from "../utils/logger.js";
 let isRunning = false;
 const deviceTimeouts = new Map<string, NodeJS.Timeout>();
 
+import { getPauseState } from "../services/redis_listener.service.js";
+
 async function poll(device: any) {
     if (!isRunning) return;
 
+    if (getPauseState()) {
+        const timeout = setTimeout(() => poll(device), 10000); // Check again in 10s if paused
+        deviceTimeouts.set(device.device_id, timeout);
+        return;
+    }
+
     const { reading, profile } = generateReading(device);
-    const isCrisis = profile !== "other";
 
     await transmitReading(reading);
 
-    const delay = isCrisis ? 15 * 60 * 1000 : 1000;
-
-    if (isCrisis) {
-        logger.success(`[ADAPTIVE] ${device.device_id} detected ${profile.toUpperCase()}. pausing for 15m.`);
-    } else {
-        logger.info(`[ADAPTIVE] ${device.device_id} is normal. polling in 1s.`);
-    }
+    const delay = 1000; // Always poll constantly at <40% confidence.
 
     const timeout = setTimeout(() => poll(device), delay);
     deviceTimeouts.set(device.device_id, timeout);

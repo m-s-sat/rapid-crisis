@@ -1,5 +1,6 @@
 import { env } from "../config/env.js";
 import { logger } from "../utils/logger.js";
+import { wss } from "../index.js";
 import { captureAllMedia } from "./media.service.js";
 import type { CrisisEvidencePayload, SensorReading } from "../types/sensor.types.js";
 
@@ -19,6 +20,14 @@ export async function transmitReading(reading: SensorReading): Promise<void> {
         sensors: reading.sensors,
         media,
     };
+
+    // Broadcast directly to local connected frontend clients via WS!
+    const wsPayload = JSON.stringify({ type: 'sensor_data', payload });
+    wss.clients.forEach((client) => {
+        if (client.readyState === 1) { // OPEN
+            client.send(wsPayload);
+        }
+    });
 
     try {
         const res = await fetch(AI_PROCESS_URL, {

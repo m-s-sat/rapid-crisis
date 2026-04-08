@@ -5,6 +5,9 @@ import { logger } from "../utils/logger.js";
 const VenueSchema = new mongoose.Schema({}, { strict: false });
 export const Venue = mongoose.models.venue || mongoose.model("venue", VenueSchema, "venues");
 
+const AdminSchema = new mongoose.Schema({}, { strict: false });
+export const Admin = mongoose.models.admin || mongoose.model("admin", AdminSchema, "admins");
+
 class MongoManager {
     async init() {
         try {

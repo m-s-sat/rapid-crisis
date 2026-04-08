@@ -1,8 +1,10 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolkit/query";
+import { logout, setCredentials } from "../auth/authSlice";
 
 const baseQuery = fetchBaseQuery({
   baseUrl: "/api",
+  credentials: "include",
   prepareHeaders: (headers, { getState }) => {
     const token = (getState() as any).auth.accessToken;
     if (token) {
@@ -19,24 +21,35 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
 ) => {
   let result = await baseQuery(args, api, extraOptions);
 
-  if (result.error && result.error.status === 403) {
-    const refreshToken = (api.getState() as any).auth.refreshToken;
-    if (refreshToken) {
-      const refreshResult: any = await baseQuery(
-        {
-          url: "/auth/refresh",
-          method: "POST",
-          body: { token: refreshToken },
-        },
-        api,
-        extraOptions
-      );
+  // If unauthorized, try to refresh
+  if (result.error && (result.error.status === 401 || result.error.status === 403)) {
+    const refreshResult: any = await baseQuery(
+      {
+        url: "/auth/refresh",
+        method: "POST",
+      },
+      api,
+      extraOptions
+    );
 
-      if (refreshResult.data) {
-        api.dispatch({ type: "auth/setTokens", payload: refreshResult.data });
-        result = await baseQuery(args, api, extraOptions);
-      } else {
-        api.dispatch({ type: "auth/logout" });
+    if (refreshResult.data && refreshResult.data.success) {
+      const { accessToken, admin, venue_id } = refreshResult.data;
+      
+      // Update store with new access token
+      api.dispatch(setCredentials({ 
+          accessToken, 
+          admin: admin || (api.getState() as any).auth.admin, 
+          venue_id: venue_id || (api.getState() as any).auth.venue_id 
+      }));
+
+      // Retry original request with new token (prepareHeaders will pick it up)
+      result = await baseQuery(args, api, extraOptions);
+    } else {
+      // Refresh failed or revoked
+      api.dispatch(logout());
+      // Only redirect on client side
+      if (typeof window !== "undefined") {
+        window.location.href = "/login";
       }
     }
   }

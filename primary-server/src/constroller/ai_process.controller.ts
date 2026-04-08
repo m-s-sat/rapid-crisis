@@ -18,13 +18,24 @@ export async function processAiEvidence(req: Request, res: Response): Promise<an
 
         await SensorEvidence.create(payload);
 
-        const redisClient = await redisManagerInstance.getClient();
-        if (!redisClient) {
-            return res.status(503).json({
-                success: false,
-                message: "Redis unavailable",
-            });
-        }
+    const redisClient = await redisManagerInstance.getClient();
+    if (!redisClient) {
+      return res.status(503).json({
+        success: false,
+        message: "Redis unavailable",
+      });
+    }
+
+    // Publish telemetry for live dashboard (even if AI analysis is skipped)
+    await redisClient.publish("sensor_data", JSON.stringify({
+      venue_id: payload.venue_id,
+      payload: {
+        device_id: payload.device_id,
+        sensors: payload.sensors,
+        location: payload.location,
+        timestamp: payload.timestamp
+      }
+    }));
 
         // Check for trends before queueing for AI
         const trends = await checkSensorTrends(
