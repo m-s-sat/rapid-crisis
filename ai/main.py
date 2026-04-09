@@ -195,7 +195,7 @@ def main():
                 continue
 
             crisis_type = classification["crisis_type"]
-            CONFIDENCE_SCORES = [0.2, 0.45, 0.68, 0.73]
+            CONFIDENCE_SCORES = [0.2, 0.39]
             if "cycle_idx" not in locals():
                 cycle_idx = 0
             confidence = CONFIDENCE_SCORES[cycle_idx]

@@ -73,33 +73,69 @@ async function startServer() {
         await subscriberClient.subscribe('messaging_status', (message) => {
             try {
                 const parsed = JSON.parse(message);
+                const targetVenueId = parsed.venue_id;
                 
                 if (parsed.type === 'decided_by_admin' && parsed.payload && parsed.payload.crisis_details) {
                     const crisisId = parsed.payload.crisis_details._id || parsed.payload.crisis_details;
-                    const venueId = parsed.venue_id;
 
                     const timeoutId = setTimeout(() => {
                         activeTimeouts.delete(crisisId);
-                        const expirationMessage = JSON.stringify({
-                            type: 'expired',
-                            crisis_id: crisisId,
-                            venue_id: venueId,
-                            message: "Timer expired."
-                        });
-                        
                         wss.clients.forEach((client: any) => {
-                            if (client.readyState === WebSocket.OPEN && client.venue_id === venueId) {
-                                client.send(expirationMessage);
+                            if (client.readyState === WebSocket.OPEN && client.venue_id === targetVenueId) {
+                                client.send(JSON.stringify({
+                                    type: 'expired',
+                                    crisis_id: crisisId,
+                                    venue_id: targetVenueId,
+                                    message: "Decision window expired. Telemetry resuming."
+                                }));
                             }
                         });
-                        console.log(`Decision timeout for crisis ${crisisId}`);
-                    }, 15 * 60 * 1000); 
+                    }, 15 * 60 * 1000);
 
                     activeTimeouts.set(crisisId, timeoutId);
+
+                    wss.clients.forEach((client: any) => {
+                        if (client.readyState === WebSocket.OPEN && (!targetVenueId || client.venue_id === targetVenueId)) {
+                            client.send(message);
+                            client.send(JSON.stringify({
+                                type: 'pause_started',
+                                venue_id: targetVenueId,
+                                duration_ms: 15 * 60 * 1000
+                            }));
+                        }
+                    });
+                    return;
+                }
+
+                if (parsed.type === 'sent') {
+                    wss.clients.forEach((client: any) => {
+                        if (client.readyState === WebSocket.OPEN && (!targetVenueId || client.venue_id === targetVenueId)) {
+                            client.send(JSON.stringify({
+                                type: 'message_sent',
+                                venue_id: targetVenueId,
+                                message: 'Crisis alerts dispatched to all registered contacts.'
+                            }));
+                            client.send(JSON.stringify({
+                                type: 'pause_started',
+                                venue_id: targetVenueId,
+                                duration_ms: 15 * 60 * 1000
+                            }));
+                        }
+                    });
+                    return;
+                }
+
+                if (parsed.type === 'resume') {
+                    wss.clients.forEach((client: any) => {
+                        if (client.readyState === WebSocket.OPEN) {
+                            client.send(JSON.stringify({ type: 'pause_ended' }));
+                        }
+                    });
+                    return;
                 }
 
                 wss.clients.forEach((client: any) => {
-                    if (client.readyState === WebSocket.OPEN && (!parsed.venue_id || client.venue_id === parsed.venue_id)) {
+                    if (client.readyState === WebSocket.OPEN && (!targetVenueId || client.venue_id === targetVenueId)) {
                         client.send(message);
                     }
                 });

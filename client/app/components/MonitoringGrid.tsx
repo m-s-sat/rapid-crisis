@@ -1,9 +1,16 @@
 "use client";
 
-import { useMonitor } from "../hooks/useMonitor";
+import { useMonitorContext } from "../context/MonitorContext";
+
+function formatCountdown(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
 
 export const MonitoringGrid = () => {
-  const { sensorData, activeCrisis, messages, handleAdminDecision } = useMonitor();
+  const { sensorData, activeCrisis, messages, handleAdminDecision, isPaused, pauseTimeRemaining } = useMonitorContext();
 
   const sensors = sensorData?.sensors;
   const sensorStats = [
@@ -27,17 +34,54 @@ export const MonitoringGrid = () => {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '2rem', height: '100%', minHeight: '600px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-        {/* Sensor Grid */}
+
+        {isPaused && (
+          <div className="command-card" style={{
+            background: 'rgba(251, 146, 60, 0.1)',
+            border: '1px solid #fb923c',
+            padding: '1.5rem 2rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            animation: 'pulse 3s infinite ease-in-out'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{
+                width: '12px',
+                height: '12px',
+                borderRadius: '50%',
+                background: '#fb923c',
+                animation: 'pulse 1.5s infinite'
+              }} />
+              <div>
+                <h3 style={{ color: '#fb923c', fontSize: '1rem', fontWeight: '700', marginBottom: '0.2rem' }}>TELEMETRY PAUSED</h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Crisis response active — sensor stream on hold</p>
+              </div>
+            </div>
+            <div style={{
+              background: 'rgba(251, 146, 60, 0.2)',
+              padding: '0.5rem 1.2rem',
+              borderRadius: '8px',
+              fontFamily: 'monospace',
+              fontSize: '1.4rem',
+              fontWeight: '800',
+              color: '#fb923c',
+              letterSpacing: '0.05em'
+            }}>
+              {formatCountdown(pauseTimeRemaining)}
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
           {sensorStats.map((stat, i) => (
-            <div key={i} className="command-card glass" style={{ textAlign: 'center', padding: '1.5rem 1rem' }}>
+            <div key={i} className="command-card glass" style={{ textAlign: 'center', padding: '1.5rem 1rem', opacity: isPaused ? 0.6 : 1, transition: 'opacity 0.3s ease' }}>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{stat.label}</p>
               <h2 style={{ color: stat.color, fontSize: '1.4rem', fontWeight: 'bold' }}>{stat.value}</h2>
             </div>
           ))}
         </div>
 
-        {/* Active Crisis Alert Area */}
         {activeCrisis && (
           <div className="command-card" style={{ 
             background: 'rgba(239, 68, 68, 0.1)', 
@@ -58,7 +102,6 @@ export const MonitoringGrid = () => {
           </div>
         )}
 
-        {/* System Activity Hub */}
         <div className="command-card glass" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: '300px' }}>
           <h3 style={{ marginBottom: '1.5rem', fontSize: '1rem' }}>SYSTEM ACTIVITY HUB</h3>
           <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -84,13 +127,12 @@ export const MonitoringGrid = () => {
         </div>
       </div>
 
-      {/* Side Control / Info Panel */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
          <div className="command-card glass">
             <h4 style={{ marginBottom: '1rem' }}>NODE STATUS</h4>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#22c55e' }}>
-                <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#22c55e' }}></div>
-                <span style={{ fontSize: '0.9rem' }}>IoT Sensor Node Online</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: isPaused ? '#fb923c' : '#22c55e' }}>
+                <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: isPaused ? '#fb923c' : '#22c55e' }}></div>
+                <span style={{ fontSize: '0.9rem' }}>{isPaused ? 'Telemetry Paused' : 'IoT Sensor Node Online'}</span>
             </div>
             <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#60a5fa' }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#60a5fa' }}></div>

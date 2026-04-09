@@ -10,7 +10,7 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction): an
 
     try {
         const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET) as any;
-        (req as any).adminId = decoded.id;
+        (req as any).adminId = decoded.sub;
         (req as any).venueId = decoded.venueId;
         next();
     } catch (err) {

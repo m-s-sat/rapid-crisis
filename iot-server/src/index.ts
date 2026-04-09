@@ -8,7 +8,7 @@ import { mongoManager } from "./db/mongo.js";
 import deviceRoutes from "./routes/device.routes.js";
 import simulatorRoutes from "./routes/simulator.routes.js";
 import { logger } from "./utils/logger.js";
-import { startRedisListener } from "./services/redis_listener.service.js";
+import { startRedisListener, getPauseState, getPauseRemainingMs } from "./services/redis_listener.service.js";
 
 const app = express();
 
@@ -18,6 +18,15 @@ app.use("/api", deviceRoutes);
 app.use("/api", simulatorRoutes);
 
 export const wss = new WebSocketServer({ noServer: true });
+
+wss.on("connection", (ws) => {
+    if (getPauseState()) {
+        const remaining = getPauseRemainingMs();
+        if (remaining > 0) {
+            ws.send(JSON.stringify({ type: "telemetry_paused", duration_ms: remaining }));
+        }
+    }
+});
 
 async function boot() {
     await mongoManager.init();
@@ -51,3 +60,4 @@ async function boot() {
 }
 
 boot();
+
