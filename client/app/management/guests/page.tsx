@@ -2,6 +2,13 @@
 
 import { useState } from "react";
 import { useGetGuestsQuery, useCreateGuestMutation, useCheckOutGuestMutation } from "../../../lib/features/guest/guestApiSlice";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { toast } from "sonner";
 
 export default function GuestRegistry() {
   const [page, setPage] = useState(1);
@@ -14,102 +21,152 @@ export default function GuestRegistry() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createGuest(newGuest).unwrap();
-    setShowForm(false);
-    setNewGuest({ name: "", room_id: "", phoneNumber: "" });
+    try {
+      await createGuest(newGuest).unwrap();
+      toast.success("Guest checked in successfully", {
+        description: `${newGuest.name} registered to Room ${newGuest.room_id}.`,
+      });
+      setShowForm(false);
+      setNewGuest({ name: "", room_id: "", phoneNumber: "" });
+    } catch (err) {
+      toast.error("Failed to check in guest", {
+        description: "Please verify the details and try again.",
+      });
+    }
+  };
+
+  const handleCheckOut = async (id: string, name: string) => {
+    try {
+      await checkOutGuest(id).unwrap();
+      toast.info("Guest checked out", {
+        description: `${name} has been archived.`,
+      });
+    } catch (err) {
+      toast.error("Failed to check out guest", {
+        description: "An error occurred. Please try again.",
+      });
+    }
   };
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+    <div className="mx-auto max-w-[1000px]">
+      {/* Header */}
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="headline" style={{ fontSize: '1.8rem', color: 'var(--primary)' }}>GUEST REGISTRY</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Live occupancy and check-in management</p>
+          <h1 className="headline text-2xl font-extrabold text-primary">GUEST REGISTRY</h1>
+          <p className="text-sm text-muted-foreground">Live occupancy and check-in management</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(true)}>+ NEW CHECK-IN</button>
+        <Button onClick={() => setShowForm(true)} className="font-semibold">
+          + NEW CHECK-IN
+        </Button>
       </div>
 
+      {/* Create Form */}
       {showForm && (
-        <div className="command-card glass" style={{ marginBottom: '2rem', border: '1px solid var(--primary-container)' }}>
-          <h3 className="headline" style={{ fontSize: '0.8rem', marginBottom: '1.2rem', color: 'var(--text-primary)' }}>RECEPTIONIST FORUM</h3>
-          <form onSubmit={handleCreate} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>GUEST NAME</label>
-              <input style={{ width: '100%' }} value={newGuest.name} onChange={e => setNewGuest({ ...newGuest, name: e.target.value })} required />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>ROOM / ID</label>
-              <input style={{ width: '100%' }} value={newGuest.room_id} onChange={e => setNewGuest({ ...newGuest, room_id: e.target.value })} required />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>PHONE</label>
-              <input style={{ width: '100%' }} value={newGuest.phoneNumber} onChange={e => setNewGuest({ ...newGuest, phoneNumber: e.target.value })} required />
-            </div>
-            <button type="submit" className="btn-primary">REGISTER</button>
-            <button type="button" className="btn-ghost" onClick={() => setShowForm(false)}>CANCEL</button>
-          </form>
-        </div>
+        <Card className="mb-6 border-primary/30 bg-card/80 backdrop-blur-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">RECEPTION DESK</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreate} className="flex items-end gap-4">
+              <div className="flex-1 space-y-2">
+                <Label className="text-xs text-muted-foreground">GUEST NAME</Label>
+                <Input value={newGuest.name} onChange={e => setNewGuest({ ...newGuest, name: e.target.value })} required className="bg-muted/30 border-border/50" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label className="text-xs text-muted-foreground">ROOM / ID</Label>
+                <Input value={newGuest.room_id} onChange={e => setNewGuest({ ...newGuest, room_id: e.target.value })} required className="bg-muted/30 border-border/50" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label className="text-xs text-muted-foreground">PHONE</Label>
+                <Input value={newGuest.phoneNumber} onChange={e => setNewGuest({ ...newGuest, phoneNumber: e.target.value })} required className="bg-muted/30 border-border/50" />
+              </div>
+              <Button type="submit" className="font-semibold">REGISTER</Button>
+              <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>CANCEL</Button>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="glass" style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ background: 'var(--surface-high)' }}>
-              <th style={{ padding: '1.2rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>GUEST</th>
-              <th style={{ padding: '1.2rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ROOM / ID</th>
-              <th style={{ padding: '1.2rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>STATUS</th>
-              <th style={{ padding: '1.2rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ACTIONS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.guests.map((guest: any) => (
-              <tr key={guest._id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                <td style={{ padding: '1.2rem', fontSize: '0.9rem', fontWeight: '500' }}>{guest.name}</td>
-                <td style={{ padding: '1.2rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{guest.room_id}</td>
-                <td style={{ padding: '1.2rem' }}>
-                    <span style={{ 
-                        padding: '4px 10px', 
-                        borderRadius: '4px', 
-                        fontSize: '0.7rem', 
-                        background: guest.status === 'active' ? 'rgba(34,197,94,0.1)' : 'var(--surface-highest)', 
-                        color: guest.status === 'active' ? 'var(--success)' : 'var(--text-secondary)',
-                        fontWeight: '700'
-                    }}>
-                        {guest.status.toUpperCase()}
-                    </span>
-                </td>
-                <td style={{ padding: '1.2rem' }}>
+      {/* Table */}
+      <Card className="border-border/30 bg-card/60 backdrop-blur-sm overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-border/30 hover:bg-transparent">
+              <TableHead className="text-xs text-muted-foreground font-semibold tracking-wider">GUEST</TableHead>
+              <TableHead className="text-xs text-muted-foreground font-semibold tracking-wider">ROOM / ID</TableHead>
+              <TableHead className="text-xs text-muted-foreground font-semibold tracking-wider">STATUS</TableHead>
+              <TableHead className="text-xs text-muted-foreground font-semibold tracking-wider">ACTIONS</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data?.guests?.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center text-muted-foreground py-8 italic">
+                  No guests registered. Click "New Check-In" to add one.
+                </TableCell>
+              </TableRow>
+            )}
+            {data?.guests?.map((guest: any) => (
+              <TableRow key={guest._id} className="border-border/20 hover:bg-muted/30 transition-colors">
+                <TableCell className="font-medium">{guest.name}</TableCell>
+                <TableCell className="text-muted-foreground">{guest.room_id}</TableCell>
+                <TableCell>
+                  <Badge
+                    variant="outline"
+                    className={`text-[0.65rem] font-bold ${
+                      guest.status === 'active'
+                        ? 'bg-green-500/10 text-green-500 border-green-500/30'
+                        : 'bg-muted text-muted-foreground border-border'
+                    }`}
+                  >
+                    {guest.status?.toUpperCase() || "UNKNOWN"}
+                  </Badge>
+                </TableCell>
+                <TableCell>
                   {guest.status === 'active' && (
-                    <button style={{ color: 'var(--primary)', background: 'transparent' }} onClick={() => checkOutGuest(guest._id)}>CHECK OUT</button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs font-semibold text-primary"
+                      onClick={() => handleCheckOut(guest._id, guest.name)}
+                    >
+                      CHECK OUT
+                    </Button>
                   )}
                   {guest.status === 'checked_out' && (
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>ARCHIVED</span>
+                    <span className="text-xs text-muted-foreground">ARCHIVED</span>
                   )}
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </Card>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '2rem' }}>
-        <button 
-            disabled={page === 1} 
-            className="btn-ghost" 
-            onClick={() => setPage(p => p - 1)}
-            style={{ opacity: page === 1 ? 0.3 : 1 }}
+      {/* Pagination */}
+      <div className="mt-6 flex items-center justify-center gap-4">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page === 1}
+          onClick={() => setPage(p => p - 1)}
+          className="disabled:opacity-30"
         >
-            PREVIOUS
-        </button>
-        <span style={{ alignSelf: 'center', fontSize: '0.9rem' }}>PAGE {page} OF {data?.totalPages || 1}</span>
-        <button 
-            disabled={page === data?.totalPages} 
-            className="btn-ghost" 
-            onClick={() => setPage(p => p + 1)}
-            style={{ opacity: page === (data?.totalPages || 1) ? 0.3 : 1 }}
+          PREVIOUS
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          PAGE {page} OF {data?.totalPages || 1}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page === (data?.totalPages || 1)}
+          onClick={() => setPage(p => p + 1)}
+          className="disabled:opacity-30"
         >
-            NEXT
-        </button>
+          NEXT
+        </Button>
       </div>
     </div>
   );

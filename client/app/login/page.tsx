@@ -5,6 +5,12 @@ import { useLoginMutation } from "../../lib/features/auth/authApiSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { setCredentials } from "../../lib/features/auth/authSlice";
 import { useRouter } from "next/navigation";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { toast } from "sonner";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -28,60 +34,105 @@ export default function Login() {
     try {
       const result = await login({ email, password }).unwrap();
       dispatch(setCredentials(result));
+      toast.success("Access granted — entering Command Center", {
+        description: "Welcome back, Commander.",
+      });
       router.push("/dashboard");
-    } catch (err) {
-      // RTK Query errors handled via 'error' state variable
+    } catch (err: any) {
+      toast.error(err?.data?.message || "Access Denied", {
+        description: "Invalid credentials or server unreachable.",
+      });
     }
   };
 
   if (authLoading || accessToken) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 'calc(100vh - 150px)', padding: '2rem' }}>
-        <div style={{ color: 'var(--primary)', fontStyle: 'italic' }}>Verifying authorization...</div>
+      <div className="flex min-h-[calc(100vh-150px)] items-center justify-center p-8">
+        <div className="text-primary italic animate-pulse">Verifying authorization...</div>
       </div>
     );
   }
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 'calc(100vh - 150px)', padding: '2rem' }}>
-      <div className="command-card glass" style={{ maxWidth: '450px', width: '100%', padding: '3rem' }}>
-        <h1 className="headline" style={{ textAlign: 'center', marginBottom: '0.5rem', color: 'var(--primary)' }}>SENTINEL ACCESS</h1>
-        <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '3rem' }}>Authorized Personnel Only</p>
+    <div className="flex min-h-[calc(100vh-150px)] items-center justify-center p-8">
+      <Card className="w-full max-w-[450px] border-border/30 bg-card/80 backdrop-blur-md">
+        <CardHeader className="text-center space-y-1 pb-2">
+          <CardTitle className="headline text-2xl font-extrabold text-primary tracking-wider">
+            SENTINEL ACCESS
+          </CardTitle>
+          <CardDescription className="text-muted-foreground">
+            Authorized Personnel Only
+          </CardDescription>
+        </CardHeader>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          <div style={{ position: 'relative' }}>
-            <input 
-              type="email" 
-              placeholder="Admin Email" 
-              required 
-              style={{ width: '100%' }}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)} 
-            />
-          </div>
-          
-          <div style={{ position: 'relative' }}>
-            <input 
-              type="password" 
-              placeholder="Password" 
-              required 
-              style={{ width: '100%' }}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)} 
-            />
-          </div>
+        <CardContent className="pt-4">
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="login-email" className="text-xs uppercase tracking-wider text-muted-foreground">
+                Admin Email
+              </Label>
+              <Input
+                id="login-email"
+                type="email"
+                placeholder="admin@sentinel.io"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="bg-muted/30 border-border/50"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="login-password" className="text-xs uppercase tracking-wider text-muted-foreground">
+                Password
+              </Label>
+              <Input
+                id="login-password"
+                type="password"
+                placeholder="••••••••"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="bg-muted/30 border-border/50"
+              />
+            </div>
 
-          {error && <p style={{ color: 'var(--error)', fontSize: '0.85rem', textAlign: 'center' }}>{(error as any).data?.message || 'Access Denied'}</p>}
+            {error && (
+              <Alert variant="destructive" className="py-2">
+                <AlertDescription className="text-sm">
+                  {(error as any).data?.message || 'Access Denied'}
+                </AlertDescription>
+              </Alert>
+            )}
 
-          <button type="submit" className="btn-primary" style={{ marginTop: '1rem', padding: '16px' }} disabled={isLoading}>
-            {isLoading ? "AUTHENTICATING..." : "ENTER COMMAND CENTER"}
-          </button>
-        </form>
+            <Button type="submit" className="w-full py-5 font-bold tracking-wide" disabled={isLoading}>
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <svg className="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                  </svg>
+                  AUTHENTICATING...
+                </span>
+              ) : (
+                "ENTER COMMAND CENTER"
+              )}
+            </Button>
+          </form>
+        </CardContent>
 
-        <p style={{ textAlign: 'center', marginTop: '2rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          New Venue? <span onClick={() => router.push('/register')} style={{ color: 'var(--primary)', cursor: 'pointer' }}>Register System</span>
-        </p>
-      </div>
+        <CardFooter className="justify-center">
+          <p className="text-sm text-muted-foreground">
+            New Venue?{" "}
+            <span
+              onClick={() => router.push('/register')}
+              className="cursor-pointer text-primary hover:underline font-medium"
+            >
+              Register System
+            </span>
+          </p>
+        </CardFooter>
+      </Card>
     </div>
   );
 }

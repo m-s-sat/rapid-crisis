@@ -22,18 +22,15 @@ export const AppLayout = ({ children }: Props) => {
       <AuthInit>
         <MonitorProvider>
           {!isAuthPage && <Sidebar />}
-          <div style={{ 
-            marginLeft: isAuthPage ? '0' : '280px', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            minHeight: '100vh',
-            transition: 'margin 0.3s ease',
-          }}>
+          <div
+            className="flex min-h-screen flex-col transition-all duration-300"
+            style={{ marginLeft: isAuthPage ? '0' : '280px' }}
+          >
             {!isAuthPage && <Header />}
-            <main style={{ flex: 1, padding: isAuthPage ? '0' : '2rem' }}>
+            <main className={`flex-1 ${isAuthPage ? "p-0" : "p-6"}`}>
               {children}
             </main>
-            <div style={{ position: 'fixed', bottom: '2rem', right: '2rem', zIndex: 9999 }}>
+            <div className="fixed bottom-6 right-6 z-[9999]">
               <ThemeToggle />
             </div>
           </div>

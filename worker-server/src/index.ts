@@ -60,7 +60,10 @@ async function sendAlerts(venue: any, crisis: any, zone: string, redisClient: an
 }
 
 async function handleAdminApproved(payload: any, redisClient: any) {
-    await sendAlerts(payload.venue_details, payload.crisis_details, payload.zone || "unknown", redisClient);
+    const zone = payload.zone || (Array.isArray(payload.zones) ? payload.zones[0] : "unknown");
+    console.log(`[ADMIN APPROVED] Sending alerts for ${payload.crisis_details?.type || "unknown"} at ${zone}`);
+    await sendAlerts(payload.venue_details, payload.crisis_details, zone, redisClient);
+    console.log(`[ADMIN APPROVED] Alerts dispatched successfully.`);
 }
 
 async function handleAiResult(result: any, redisClient: any) {
@@ -158,8 +161,11 @@ async function startWorker() {
         console.log("Worker started, listening on: ai_result_queue, admin_approved");
 
         while (true) {
+            // admin_approved MUST be listed first — brPop returns from the first
+            // non-empty key in order. If ai_result_queue is listed first, admin
+            // approvals get starved because the AI queue is always populated.
             const result = await client.brPop(
-                ["ai_result_queue", "admin_approved"],
+                ["admin_approved", "ai_result_queue"],
                 0
             );
             if (!result) continue;

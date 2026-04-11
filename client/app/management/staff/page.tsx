@@ -2,6 +2,14 @@
 
 import { useState } from "react";
 import { useGetStaffQuery, useCreateStaffMutation, useDeleteStaffMutation } from "../../../lib/features/staff/staffApiSlice";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { toast } from "sonner";
 
 export default function StaffDirectory() {
   const [page, setPage] = useState(1);
@@ -16,119 +24,172 @@ export default function StaffDirectory() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await createStaff(newStaff).unwrap();
-    setShowForm(false);
-    setNewStaff({ name: "", phoneNumber: "", expertise: "fire" });
+    try {
+      await createStaff(newStaff).unwrap();
+      toast.success("Staff member registered", {
+        description: `${newStaff.name} added to the ${newStaff.expertise} response team.`,
+      });
+      setShowForm(false);
+      setNewStaff({ name: "", phoneNumber: "", expertise: "fire" });
+    } catch (err) {
+      toast.error("Failed to register staff", {
+        description: "Please check the details and try again.",
+      });
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    try {
+      await deleteStaff(id).unwrap();
+      toast.info("Staff member removed", {
+        description: `${name} has been removed from the registry.`,
+      });
+    } catch (err) {
+      toast.error("Failed to remove staff", {
+        description: "An error occurred. Please try again.",
+      });
+    }
+  };
+
+  const expertiseColors: Record<string, string> = {
+    fire: "bg-red-500/10 text-red-500 border-red-500/30",
+    security: "bg-blue-500/10 text-blue-500 border-blue-500/30",
+    medical: "bg-green-500/10 text-green-500 border-green-500/30",
+    all: "bg-purple-500/10 text-purple-500 border-purple-500/30",
   };
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+    <div className="mx-auto max-w-[1000px]">
+      {/* Header */}
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="headline" style={{ fontSize: '1.8rem', color: 'var(--primary)' }}>STAFF DIRECTORY</h1>
-          <p style={{ color: 'var(--text-secondary)' }}>Crisis response personnel registry</p>
+          <h1 className="headline text-2xl font-extrabold text-primary">STAFF DIRECTORY</h1>
+          <p className="text-sm text-muted-foreground">Crisis response personnel registry</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowForm(true)}>+ REGISTER STAFF</button>
+        <Button onClick={() => setShowForm(true)} className="font-semibold">
+          + REGISTER STAFF
+        </Button>
       </div>
 
-      <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+      {/* Filters */}
+      <div className="mb-6 flex gap-2">
         {['all', 'fire', 'security', 'medical'].map((exp) => (
-          <button 
+          <Button
             key={exp}
+            variant={expertise === exp ? "default" : "outline"}
+            size="sm"
+            className="rounded-full text-xs font-semibold uppercase"
             onClick={() => { setExpertise(exp); setPage(1); }}
-            style={{ 
-              padding: '8px 16px', 
-              borderRadius: '20px', 
-              fontSize: '0.8rem',
-              background: expertise === exp ? 'var(--primary)' : 'var(--surface-high)',
-              color: expertise === exp ? 'var(--on-primary)' : 'var(--text-secondary)'
-            }}
           >
-            {exp.toUpperCase()}
-          </button>
+            {exp}
+          </Button>
         ))}
       </div>
 
+      {/* Create Form */}
       {showForm && (
-        <div className="command-card glass" style={{ marginBottom: '2rem', border: '1px solid var(--primary-container)' }}>
-          <form onSubmit={handleCreate} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end' }}>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>NAME</label>
-              <input style={{ width: '100%' }} value={newStaff.name} onChange={e => setNewStaff({ ...newStaff, name: e.target.value })} required />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>PHONE</label>
-              <input style={{ width: '100%' }} value={newStaff.phoneNumber} onChange={e => setNewStaff({ ...newStaff, phoneNumber: e.target.value })} required />
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.4rem' }}>EXPERTISE</label>
-              <select style={{ width: '100%' }} value={newStaff.expertise} onChange={e => setNewStaff({ ...newStaff, expertise: e.target.value as any })}>
-                <option value="fire">FIRE</option>
-                <option value="security">SECURITY</option>
-                <option value="medical">MEDICAL</option>
-                <option value="all">ALL</option>
-              </select>
-            </div>
-            <button type="submit" className="btn-primary">SAVE</button>
-            <button type="button" className="btn-ghost" onClick={() => setShowForm(false)}>CANCEL</button>
-          </form>
-        </div>
+        <Card className="mb-6 border-primary/30 bg-card/80 backdrop-blur-sm">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">NEW STAFF REGISTRATION</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCreate} className="flex items-end gap-4">
+              <div className="flex-1 space-y-2">
+                <Label className="text-xs text-muted-foreground">NAME</Label>
+                <Input value={newStaff.name} onChange={e => setNewStaff({ ...newStaff, name: e.target.value })} required className="bg-muted/30 border-border/50" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label className="text-xs text-muted-foreground">PHONE</Label>
+                <Input value={newStaff.phoneNumber} onChange={e => setNewStaff({ ...newStaff, phoneNumber: e.target.value })} required className="bg-muted/30 border-border/50" />
+              </div>
+              <div className="flex-1 space-y-2">
+                <Label className="text-xs text-muted-foreground">EXPERTISE</Label>
+                <Select value={newStaff.expertise} onValueChange={(value) => setNewStaff({ ...newStaff, expertise: value })}>
+                  <SelectTrigger className="bg-muted/30 border-border/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="fire">FIRE</SelectItem>
+                    <SelectItem value="security">SECURITY</SelectItem>
+                    <SelectItem value="medical">MEDICAL</SelectItem>
+                    <SelectItem value="all">ALL</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="submit" className="font-semibold">SAVE</Button>
+              <Button type="button" variant="ghost" onClick={() => setShowForm(false)}>CANCEL</Button>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
-      <div className="glass" style={{ borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-          <thead>
-            <tr style={{ background: 'var(--surface-high)' }}>
-              <th style={{ padding: '1.2rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>NAME</th>
-              <th style={{ padding: '1.2rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>PHONE</th>
-              <th style={{ padding: '1.2rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>EXPERTISE</th>
-              <th style={{ padding: '1.2rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>ACTIONS</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data?.staff.map((staff: any) => (
-              <tr key={staff._id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                <td style={{ padding: '1.2rem', fontSize: '0.9rem', fontWeight: '500' }}>{staff.name}</td>
-                <td style={{ padding: '1.2rem', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>{staff.phoneNumber}</td>
-                <td style={{ padding: '1.2rem' }}>
-                    <span style={{ 
-                        padding: '4px 10px', 
-                        borderRadius: '4px', 
-                        fontSize: '0.7rem', 
-                        background: 'var(--surface-highest)', 
-                        color: 'var(--primary)',
-                        fontWeight: '700'
-                    }}>
-                        {staff.expertise.toUpperCase()}
-                    </span>
-                </td>
-                <td style={{ padding: '1.2rem' }}>
-                  <button style={{ color: 'var(--error)', background: 'transparent' }} onClick={() => deleteStaff(staff._id)}>REMOVE</button>
-                </td>
-              </tr>
+      {/* Table */}
+      <Card className="border-border/30 bg-card/60 backdrop-blur-sm overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-border/30 hover:bg-transparent">
+              <TableHead className="text-xs text-muted-foreground font-semibold tracking-wider">NAME</TableHead>
+              <TableHead className="text-xs text-muted-foreground font-semibold tracking-wider">PHONE</TableHead>
+              <TableHead className="text-xs text-muted-foreground font-semibold tracking-wider">EXPERTISE</TableHead>
+              <TableHead className="text-xs text-muted-foreground font-semibold tracking-wider">ACTIONS</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {data?.staff?.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={4} className="text-center text-muted-foreground py-8 italic">
+                  No staff members registered. Click "Register Staff" to add one.
+                </TableCell>
+              </TableRow>
+            )}
+            {data?.staff?.map((staff: any) => (
+              <TableRow key={staff._id} className="border-border/20 hover:bg-muted/30 transition-colors">
+                <TableCell className="font-medium">{staff.name}</TableCell>
+                <TableCell className="text-muted-foreground">{staff.phoneNumber}</TableCell>
+                <TableCell>
+                  <Badge variant="outline" className={`text-[0.65rem] font-bold ${expertiseColors[staff.expertise] || expertiseColors.all}`}>
+                    {staff.expertise.toUpperCase()}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10 text-xs font-semibold"
+                    onClick={() => handleDelete(staff._id, staff.name)}
+                  >
+                    REMOVE
+                  </Button>
+                </TableCell>
+              </TableRow>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </TableBody>
+        </Table>
+      </Card>
 
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '2rem' }}>
-        <button 
-            disabled={page === 1} 
-            className="btn-ghost" 
-            onClick={() => setPage(p => p - 1)}
-            style={{ opacity: page === 1 ? 0.3 : 1 }}
+      {/* Pagination */}
+      <div className="mt-6 flex items-center justify-center gap-4">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page === 1}
+          onClick={() => setPage(p => p - 1)}
+          className="disabled:opacity-30"
         >
-            PREVIOUS
-        </button>
-        <span style={{ alignSelf: 'center', fontSize: '0.9rem' }}>PAGE {page} OF {data?.totalPages || 1}</span>
-        <button 
-            disabled={page === data?.totalPages} 
-            className="btn-ghost" 
-            onClick={() => setPage(p => p + 1)}
-            style={{ opacity: page === (data?.totalPages || 1) ? 0.3 : 1 }}
+          PREVIOUS
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          PAGE {page} OF {data?.totalPages || 1}
+        </span>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={page === (data?.totalPages || 1)}
+          onClick={() => setPage(p => p + 1)}
+          className="disabled:opacity-30"
         >
-            NEXT
-        </button>
+          NEXT
+        </Button>
       </div>
     </div>
   );

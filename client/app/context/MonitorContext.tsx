@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useRef, useCallback, ReactNode } from "react";
 import { useSelector } from "react-redux";
+import { toast } from "sonner";
 
 interface MonitorMessage {
   id: number;
@@ -79,21 +80,49 @@ export const MonitorProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const handleAdminDecision = useCallback(async (action: "approve" | "cancel", payload: any) => {
+    const loadingId = toast.loading(
+      action === "approve"
+        ? "Dispatching crisis alerts to all contacts..."
+        : "Dismissing alert — resuming telemetry..."
+    );
+
     try {
       const res = await fetch(`http://127.0.0.1:3002/api/admin/decision`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, payload }),
       });
+
       if (res.ok) {
+        toast.dismiss(loadingId);
         setActiveCrisis(null);
+
+        if (action === "approve") {
+          toast.success("Protocol activated — alerts dispatched to all contacts", {
+            description: "Staff and guests have been notified with safety instructions.",
+          });
+        } else {
+          toast.info("False alarm dismissed — telemetry resuming", {
+            description: "System returning to normal monitoring state.",
+          });
+        }
+
         addMessage({
           type: action === "approve" ? "success" : "info",
           text: `Admin ${action === "approve" ? "approved" : "cancelled"} the crisis alert.`,
           time: new Date().toLocaleTimeString(),
         });
+      } else {
+        toast.dismiss(loadingId);
+        toast.error("Server rejected the decision", {
+          description: "Please try again or check server connectivity.",
+        });
       }
     } catch (err) {
+      toast.dismiss(loadingId);
+      toast.error("Failed to submit decision", {
+        description: "Network error — check your connection to the command server.",
+      });
       console.error("Error submitting decision:", err);
     }
   }, [addMessage]);
@@ -119,8 +148,14 @@ export const MonitorProvider = ({ children }: { children: ReactNode }) => {
           setSensorData(data.payload);
         } else if (data.type === "telemetry_paused") {
           startCountdown(data.duration_ms || 15 * 60 * 1000);
+          toast.info("Telemetry paused — crisis response active", {
+            description: "Sensor stream on hold during incident response.",
+          });
         } else if (data.type === "telemetry_resumed") {
           stopCountdown();
+          toast.success("Telemetry stream resumed", {
+            description: "Sensor data flowing normally.",
+          });
         }
       } catch (err) {
         console.error("WS Sensor Message Error:", err);
@@ -134,18 +169,33 @@ export const MonitorProvider = ({ children }: { children: ReactNode }) => {
         if (data.type === "crisis_detected" || data.type === "crisis_update" || data.type === "decided_by_admin") {
           const payload = data.payload || data;
           setActiveCrisis(payload);
+
+          const crisisType = payload.crisis_type || "Unknown";
+          const zone = payload.zone || (payload.zones ? payload.zones[0] : "unknown");
+          const confidence = payload.confidence_score;
+
           addMessage({
             type: data.type === "decided_by_admin" ? "alert" : "info",
-            text: `Manual Review Required: ${payload.crisis_type} detected at ${payload.zone || (payload.zones ? payload.zones[0] : "unknown")}`,
+            text: `Manual Review Required: ${crisisType} detected at ${zone}`,
             time: new Date().toLocaleTimeString(),
-            confidence: payload.confidence_score,
+            confidence,
           });
+
+          if (data.type === "decided_by_admin") {
+            toast.warning(`⚠ Manual review: ${crisisType} at ${zone}`, {
+              description: `Confidence: ${confidence ? Math.round(confidence * 100) : "?"}% — Admin decision required.`,
+              duration: 8000,
+            });
+          }
         } else if (data.type === "expired") {
           setActiveCrisis(null);
           addMessage({
             type: "info",
             text: data.message || "Timeout expired across decision window.",
             time: new Date().toLocaleTimeString(),
+          });
+          toast.warning("Decision window expired", {
+            description: "No action taken — telemetry resumed automatically.",
           });
         } else if (data.type === "crisis_resolved") {
           setActiveCrisis(null);
@@ -154,16 +204,23 @@ export const MonitorProvider = ({ children }: { children: ReactNode }) => {
             text: data.message || `${data.crisis_type || "Crisis"} has been auto-resolved.`,
             time: new Date().toLocaleTimeString(),
           });
+          toast.info("Crisis auto-resolved — returning to normal ops", {
+            description: data.message || `${data.crisis_type || "Incident"} no longer detected.`,
+          });
         } else if (data.type === "message_sent") {
           addMessage({
             type: "success",
             text: data.message || "Crisis alerts dispatched to all registered contacts.",
             time: new Date().toLocaleTimeString(),
           });
+          toast.success("Crisis alerts sent to all contacts", {
+            description: "Staff and guests have been notified.",
+          });
         } else if (data.type === "pause_started") {
           startCountdown(data.duration_ms || 15 * 60 * 1000);
         } else if (data.type === "pause_ended") {
           stopCountdown();
+          toast.success("Telemetry stream resumed");
         }
       } catch (err) {
         console.error("WS Alert Message Error:", err);

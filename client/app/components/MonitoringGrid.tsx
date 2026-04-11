@@ -1,6 +1,10 @@
 "use client";
 
 import { useMonitorContext } from "../context/MonitorContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 function formatCountdown(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -14,138 +18,175 @@ export const MonitoringGrid = () => {
 
   const sensors = sensorData?.sensors;
   const sensorStats = [
-    { label: "Temperature", value: sensors?.temperature_c !== undefined ? `${sensors.temperature_c.toFixed(1)}°C` : "--", color: "#60a5fa" },
-    { label: "Humidity", value: sensors?.humidity_pct !== undefined ? `${sensors.humidity_pct.toFixed(1)}%` : "--", color: "#818cf8" },
-    { label: "Smoke Level", value: sensors?.smoke_ppm !== undefined ? `${sensors.smoke_ppm.toFixed(0)} ppm` : "--", color: "#f87171" },
-    { label: "Air Quality (AQI)", value: sensors?.air_quality_index !== undefined ? `${sensors.air_quality_index.toFixed(0)}` : "--", color: "#a78bfa" },
-    { label: "CO2 Level", value: sensors?.co2_ppm !== undefined ? `${sensors.co2_ppm.toFixed(0)} ppm` : "--", color: "#fb923c" },
-    { label: "CO Level", value: sensors?.co_ppm !== undefined ? `${sensors.co_ppm.toFixed(1)} ppm` : "--", color: "#f43f5e" },
-    { label: "Gas LPG", value: sensors?.gas_lpg_ppm !== undefined ? `${sensors.gas_lpg_ppm.toFixed(1)} ppm` : "--", color: "#ea580c" },
-    { label: "Gas Methane", value: sensors?.gas_methane_ppm !== undefined ? `${sensors.gas_methane_ppm.toFixed(1)} ppm` : "--", color: "#d97706" },
-    { label: "Sound Level", value: sensors?.sound_db !== undefined ? `${sensors.sound_db.toFixed(1)} dB` : "--", color: "#2dd4bf" },
-    { label: "Vibration", value: sensors?.vibration_g !== undefined ? `${sensors.vibration_g.toFixed(2)} g` : "--", color: "#eab308" },
-    { label: "Water Level", value: sensors?.water_level_cm !== undefined ? `${sensors.water_level_cm.toFixed(1)} cm` : "--", color: "#34d399" },
-    { label: "Presence", value: sensors?.motion_detected ? "DETECTED" : "NONE", color: sensors?.motion_detected ? "#fbbf24" : "var(--text-secondary)" },
-    { label: "Flame Detected", value: sensors?.flame_detected ? "WARN" : "SAFE", color: sensors?.flame_detected ? "#ef4444" : "var(--text-secondary)" },
-    { label: "Moisture", value: sensors?.moisture_detected ? "WARN" : "SAFE", color: sensors?.moisture_detected ? "#3b82f6" : "var(--text-secondary)" },
-    { label: "Door Status", value: sensors?.door_open ? "OPEN" : "CLOSED", color: sensors?.door_open ? "#fbbf24" : "var(--text-secondary)" },
+    { label: "Temperature", value: sensors?.temperature_c !== undefined ? `${sensors.temperature_c.toFixed(1)}°C` : "--", color: "text-blue-400" },
+    { label: "Humidity", value: sensors?.humidity_pct !== undefined ? `${sensors.humidity_pct.toFixed(1)}%` : "--", color: "text-indigo-400" },
+    { label: "Smoke Level", value: sensors?.smoke_ppm !== undefined ? `${sensors.smoke_ppm.toFixed(0)} ppm` : "--", color: "text-red-400" },
+    { label: "Air Quality", value: sensors?.air_quality_index !== undefined ? `${sensors.air_quality_index.toFixed(0)}` : "--", color: "text-purple-400" },
+    { label: "CO2 Level", value: sensors?.co2_ppm !== undefined ? `${sensors.co2_ppm.toFixed(0)} ppm` : "--", color: "text-orange-400" },
+    { label: "CO Level", value: sensors?.co_ppm !== undefined ? `${sensors.co_ppm.toFixed(1)} ppm` : "--", color: "text-rose-500" },
+    { label: "Gas LPG", value: sensors?.gas_lpg_ppm !== undefined ? `${sensors.gas_lpg_ppm.toFixed(1)} ppm` : "--", color: "text-orange-600" },
+    { label: "Gas Methane", value: sensors?.gas_methane_ppm !== undefined ? `${sensors.gas_methane_ppm.toFixed(1)} ppm` : "--", color: "text-amber-500" },
+    { label: "Sound Level", value: sensors?.sound_db !== undefined ? `${sensors.sound_db.toFixed(1)} dB` : "--", color: "text-teal-400" },
+    { label: "Vibration", value: sensors?.vibration_g !== undefined ? `${sensors.vibration_g.toFixed(2)} g` : "--", color: "text-yellow-500" },
+    { label: "Water Level", value: sensors?.water_level_cm !== undefined ? `${sensors.water_level_cm.toFixed(1)} cm` : "--", color: "text-emerald-400" },
+    { label: "Presence", value: sensors?.motion_detected ? "DETECTED" : "NONE", color: sensors?.motion_detected ? "text-yellow-400" : "text-muted-foreground" },
+    { label: "Flame", value: sensors?.flame_detected ? "WARN" : "SAFE", color: sensors?.flame_detected ? "text-red-500" : "text-muted-foreground" },
+    { label: "Moisture", value: sensors?.moisture_detected ? "WARN" : "SAFE", color: sensors?.moisture_detected ? "text-blue-500" : "text-muted-foreground" },
+    { label: "Door", value: sensors?.door_open ? "OPEN" : "CLOSED", color: sensors?.door_open ? "text-yellow-400" : "text-muted-foreground" },
   ];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '2rem', height: '100%', minHeight: '600px' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+    <div className="grid grid-cols-[1fr_300px] gap-6 min-h-[600px]">
+      {/* Main Content */}
+      <div className="flex flex-col gap-6">
 
+        {/* Pause Banner */}
         {isPaused && (
-          <div className="command-card" style={{
-            background: 'rgba(251, 146, 60, 0.1)',
-            border: '1px solid #fb923c',
-            padding: '1.5rem 2rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            animation: 'pulse 3s infinite ease-in-out'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <div style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                background: '#fb923c',
-                animation: 'pulse 1.5s infinite'
-              }} />
-              <div>
-                <h3 style={{ color: '#fb923c', fontSize: '1rem', fontWeight: '700', marginBottom: '0.2rem' }}>TELEMETRY PAUSED</h3>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem' }}>Crisis response active — sensor stream on hold</p>
+          <Alert className="border-orange-500/50 bg-orange-500/10">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="relative flex h-3 w-3">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-orange-400 opacity-75"></span>
+                  <span className="relative inline-flex h-3 w-3 rounded-full bg-orange-500"></span>
+                </span>
+                <div>
+                  <AlertTitle className="text-orange-500 font-bold text-sm">TELEMETRY PAUSED</AlertTitle>
+                  <AlertDescription className="text-muted-foreground text-xs">
+                    Crisis response active — sensor stream on hold
+                  </AlertDescription>
+                </div>
+              </div>
+              <div className="rounded-lg bg-orange-500/20 px-4 py-2 font-mono text-xl font-extrabold text-orange-500 tracking-wider">
+                {formatCountdown(pauseTimeRemaining)}
               </div>
             </div>
-            <div style={{
-              background: 'rgba(251, 146, 60, 0.2)',
-              padding: '0.5rem 1.2rem',
-              borderRadius: '8px',
-              fontFamily: 'monospace',
-              fontSize: '1.4rem',
-              fontWeight: '800',
-              color: '#fb923c',
-              letterSpacing: '0.05em'
-            }}>
-              {formatCountdown(pauseTimeRemaining)}
-            </div>
-          </div>
+          </Alert>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
+        {/* Sensor Grid */}
+        <div className={`grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 transition-opacity duration-300 ${isPaused ? 'opacity-50' : ''}`}>
           {sensorStats.map((stat, i) => (
-            <div key={i} className="command-card glass" style={{ textAlign: 'center', padding: '1.5rem 1rem', opacity: isPaused ? 0.6 : 1, transition: 'opacity 0.3s ease' }}>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', textTransform: 'uppercase', marginBottom: '0.5rem' }}>{stat.label}</p>
-              <h2 style={{ color: stat.color, fontSize: '1.4rem', fontWeight: 'bold' }}>{stat.value}</h2>
-            </div>
+            <Card key={i} className="bg-card/60 backdrop-blur-sm border-border/30 hover:bg-card/80 transition-all">
+              <CardContent className="pt-4 pb-4 text-center">
+                <p className="text-[0.65rem] uppercase tracking-wider text-muted-foreground mb-1.5">{stat.label}</p>
+                <p className={`text-xl font-bold ${stat.color}`}>{stat.value}</p>
+              </CardContent>
+            </Card>
           ))}
         </div>
 
+        {/* Crisis Alert Panel */}
         {activeCrisis && (
-          <div className="command-card" style={{ 
-            background: 'rgba(239, 68, 68, 0.1)', 
-            border: '1px solid #ef4444', 
-            padding: '2rem',
-            animation: 'pulse 2s infinite ease-in-out'
-          }}>
-            <h1 style={{ color: '#ef4444', marginBottom: '0.5rem' }}>CRISIS DETECTED: {activeCrisis.crisis_type || (activeCrisis.crisis_details ? activeCrisis.crisis_details.type : "Unknown")}</h1>
-            <p style={{ color: 'var(--text-primary)' }}>Zone: {activeCrisis.zone || (activeCrisis.zones ? activeCrisis.zones[0] : "unknown")} | Confidence: {(activeCrisis.confidence_score * 100).toFixed(0)}%</p>
-            <div style={{ marginTop: '1.5rem', display: 'flex', gap: '1rem' }}>
+          <Card className="border-destructive/50 bg-destructive/5 animate-pulse">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-destructive text-xl font-extrabold flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex h-3 w-3 rounded-full bg-red-500"></span>
+                </span>
+                CRISIS DETECTED: {activeCrisis.crisis_type || (activeCrisis.crisis_details ? activeCrisis.crisis_details.type : "Unknown")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-foreground mb-4">
+                Zone: <span className="font-semibold">{activeCrisis.zone || (activeCrisis.zones ? activeCrisis.zones[0] : "unknown")}</span>
+                {" | "}
+                Confidence: <Badge variant="destructive" className="ml-1">{(activeCrisis.confidence_score * 100).toFixed(0)}%</Badge>
+              </p>
               {activeCrisis.confidence_score < 0.7 && (
-                <>
-                   <button className="btn-primary" style={{ background: '#ef4444', color: '#fff' }} onClick={() => handleAdminDecision('approve', activeCrisis)}>ACTIVATE PROTOCOL</button>
-                   <button className="btn-ghost" onClick={() => handleAdminDecision('cancel', activeCrisis)}>FALSE ALARM</button>
-                </>
+                <div className="flex gap-3">
+                  <Button
+                    variant="destructive"
+                    size="lg"
+                    className="font-bold"
+                    onClick={() => handleAdminDecision('approve', activeCrisis)}
+                  >
+                    🚨 ACTIVATE PROTOCOL
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => handleAdminDecision('cancel', activeCrisis)}
+                  >
+                    FALSE ALARM
+                  </Button>
+                </div>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         )}
 
-        <div className="command-card glass" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: '300px' }}>
-          <h3 style={{ marginBottom: '1.5rem', fontSize: '1rem' }}>SYSTEM ACTIVITY HUB</h3>
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        {/* Activity Hub */}
+        <Card className="flex-1 bg-card/60 backdrop-blur-sm border-border/30 min-h-[300px] flex flex-col">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold tracking-wide">SYSTEM ACTIVITY HUB</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 overflow-y-auto flex flex-col gap-3">
             {messages.length === 0 ? (
-              <p style={{ color: 'var(--text-secondary)', fontStyle: 'italic' }}>Monitoring protocols active. Awaiting telemetry data...</p>
+              <p className="text-muted-foreground italic text-sm">
+                Monitoring protocols active. Awaiting telemetry data...
+              </p>
             ) : (
               messages.map((msg) => (
-                <div key={msg.id} style={{ 
-                  padding: '1rem', 
-                  background: 'rgba(255,255,255,0.05)', 
-                  borderRadius: '8px',
-                  borderLeft: `4px solid ${msg.type === 'alert' ? '#ef4444' : msg.type === 'success' ? '#22c55e' : '#60a5fa'}`
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{msg.time}</span>
-                    {msg.confidence && <span style={{ fontSize: '0.75rem', color: '#ef4444' }}>{Math.round(msg.confidence * 100)}% Match</span>}
+                <div
+                  key={msg.id}
+                  className={`rounded-lg bg-muted/30 p-3 border-l-4 ${
+                    msg.type === 'alert' ? 'border-l-destructive' :
+                    msg.type === 'success' ? 'border-l-green-500' :
+                    'border-l-blue-500'
+                  }`}
+                >
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[0.65rem] text-muted-foreground">{msg.time}</span>
+                    {msg.confidence && (
+                      <Badge variant="destructive" className="text-[0.6rem] h-5">
+                        {Math.round(msg.confidence * 100)}% Match
+                      </Badge>
+                    )}
                   </div>
-                  <p style={{ fontSize: '0.9rem' }}>{msg.text}</p>
+                  <p className="text-sm text-foreground">{msg.text}</p>
                 </div>
               ))
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-         <div className="command-card glass">
-            <h4 style={{ marginBottom: '1rem' }}>NODE STATUS</h4>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: isPaused ? '#fb923c' : '#22c55e' }}>
-                <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: isPaused ? '#fb923c' : '#22c55e' }}></div>
-                <span style={{ fontSize: '0.9rem' }}>{isPaused ? 'Telemetry Paused' : 'IoT Sensor Node Online'}</span>
+      {/* Right Sidebar */}
+      <div className="flex flex-col gap-4">
+        <Card className="bg-card/60 backdrop-blur-sm border-border/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">NODE STATUS</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${isPaused ? 'bg-orange-400' : 'bg-green-400'}`}></span>
+                <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${isPaused ? 'bg-orange-500' : 'bg-green-500'}`}></span>
+              </span>
+              <span className={`text-sm ${isPaused ? 'text-orange-500' : 'text-green-500'}`}>
+                {isPaused ? 'Telemetry Paused' : 'IoT Sensor Node Online'}
+              </span>
             </div>
-            <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#60a5fa' }}>
-                <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#60a5fa' }}></div>
-                <span style={{ fontSize: '0.9rem' }}>Gateway Linked</span>
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-blue-500"></span>
+              </span>
+              <span className="text-sm text-blue-400">Gateway Linked</span>
             </div>
-         </div>
+          </CardContent>
+        </Card>
 
-         <div className="command-card glass">
-            <h4 style={{ marginBottom: '1rem' }}>PROTOCOL 7</h4>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+        <Card className="bg-card/60 backdrop-blur-sm border-border/30">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">PROTOCOL 7</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground leading-relaxed">
               Sentinel Command is currently operating in Automated Response mode. Confidence scores above 70% will trigger immediate guest notification.
             </p>
-         </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

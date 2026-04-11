@@ -4,6 +4,10 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useDispatch, useSelector } from "react-redux";
 import { logout } from "../../lib/features/auth/authSlice";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 export const Sidebar = () => {
   const pathname = usePathname();
@@ -15,6 +19,7 @@ export const Sidebar = () => {
 
   const handleLogout = () => {
     dispatch(logout());
+    toast.info("Signed out — session terminated");
     router.push("/login");
   };
 
@@ -26,48 +31,64 @@ export const Sidebar = () => {
   ];
 
   return (
-    <aside style={{ width: '280px', height: '100vh', background: 'var(--surface-low)', borderRight: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', padding: '2rem 1rem', position: 'fixed' }}>
-      <div style={{ marginBottom: '3rem', padding: '0 1rem' }}>
-        <h2 className="headline" style={{ color: 'var(--primary)', fontSize: '1.2rem', letterSpacing: '0.1em' }}>SENTINEL</h2>
-        <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', textTransform: 'uppercase', marginTop: '0.2rem' }}>Crisis Response v1.0</p>
+    <aside className="fixed left-0 top-0 z-40 flex h-screen w-[280px] flex-col border-r border-sidebar-border bg-sidebar p-4">
+      {/* Logo */}
+      <div className="mb-8 px-3 pt-4">
+        <h2 className="headline text-lg font-bold tracking-widest text-sidebar-primary">
+          SENTINEL
+        </h2>
+        <p className="mt-1 text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+          Crisis Response v1.0
+        </p>
       </div>
 
-      <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <Separator className="mb-4 opacity-50" />
+
+      {/* Navigation */}
+      <nav className="flex flex-1 flex-col gap-1">
         {navItems.map((item) => {
           const isActive = pathname === item.path || (item.path !== '/dashboard' && pathname.startsWith(item.path));
           return (
-            <Link 
-              key={item.path} 
-              href={item.path}
-              className={isActive ? "glass" : ""}
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '1rem', 
-                padding: '12px 16px', 
-                borderRadius: '8px',
-                color: isActive ? 'var(--primary)' : 'var(--text-secondary)',
-                textDecoration: 'none',
-                fontWeight: isActive ? '600' : '400',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <span style={{ fontSize: '1.2rem' }}>{item.icon}</span>
-              <span style={{ fontSize: '0.9rem' }}>{item.name}</span>
+            <Link key={item.path} href={item.path} className="no-underline">
+              <Button
+                variant={isActive ? "secondary" : "ghost"}
+                className={`w-full justify-start gap-3 px-3 py-5 text-sm font-medium transition-all ${
+                  isActive
+                    ? "bg-sidebar-accent text-sidebar-primary font-semibold"
+                    : "text-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+                }`}
+              >
+                <span className="text-lg">{item.icon}</span>
+                <span>{item.name}</span>
+                {isActive && (
+                  <Badge variant="secondary" className="ml-auto h-2 w-2 rounded-full bg-sidebar-primary p-0" />
+                )}
+              </Button>
             </Link>
           );
         })}
       </nav>
 
-      <div style={{ padding: '1rem', marginTop: 'auto' }}>
-        <button 
+      <Separator className="mb-4 opacity-50" />
+
+      {/* Admin Info + Logout */}
+      <div className="px-1 pb-2">
+        <div className="mb-3 rounded-lg bg-sidebar-accent/30 p-3">
+          <p className="text-xs font-semibold text-sidebar-foreground">
+            {auth.admin?.name || "ADMINISTRATOR"}
+          </p>
+          <p className="mt-0.5 text-[0.65rem] text-muted-foreground truncate">
+            {auth.admin?.email || "admin@sentinel.io"}
+          </p>
+        </div>
+        <Button
           onClick={handleLogout}
-          className="btn-ghost" 
-          style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: '1rem' }}
+          variant="ghost"
+          className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
         >
           <span>🚪</span>
           <span>Sign Out</span>
-        </button>
+        </Button>
       </div>
     </aside>
   );
