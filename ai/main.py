@@ -2,122 +2,81 @@ import redis
 import json
 import time
 import os
-import boto3
 import base64
 from datetime import datetime
 from dotenv import load_dotenv
 from bson import ObjectId
 from pymongo import MongoClient
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/google-solutions")
-
-# AWS Bedrock Config
-AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
-AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
-AWS_MODEL_ID = os.getenv("AWS_MODEL_ID", "amazon.nova-lite-v1:0")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
 INPUT_QUEUE = "ai_evidence_queue"
 OUTPUT_QUEUE = "ai_result_queue"
 
-# Initialize Bedrock Client
-bedrock_client = None
-if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY:
+# Initialize Google GenAI Client
+client = None
+if GOOGLE_API_KEY:
     try:
-        bedrock_client = boto3.client(
-            service_name='bedrock-runtime',
-            region_name=AWS_REGION,
-            aws_access_key_id=AWS_ACCESS_KEY_ID,
-            aws_secret_access_key=AWS_SECRET_ACCESS_KEY
-        )
-        print(f"[AI] Connected to AWS Bedrock ({AWS_REGION}) using Universal Converse API")
-        print(f"[AI] Active Model: {AWS_MODEL_ID}")
+        client = genai.Client(api_key=GOOGLE_API_KEY)
+        print(f"[AI] Initialized Google Gemini Console (Model: gemini-flash-lite-latest)")
     except Exception as e:
-        print(f"[AI ERROR] Failed to initialize Bedrock client: {e}")
+        print(f"[AI ERROR] Failed to initialize Google GenAI: {e}")
 else:
-    print("[AI WARNING] AWS credentials not found. Bedrock classification will fail.")
+    print("[AI WARNING] GOOGLE_API_KEY not found. AI classification will fail.")
 
-# Classifies crisis using the Bedrock Universal Converse API (Compatible with Nova and Claude)
+# Classifies crisis using Google Gemini Flash-Lite
 def classify_with_ai(evidence):
-    if not bedrock_client:
-        return {"crisis_detected": False, "error": "AWS Bedrock client not initialized"}
+    if not client:
+        return {"crisis_detected": False, "error": "Google GenAI client not initialized"}
 
     sensors = evidence.get("sensors", {})
     zone = evidence.get("location", {}).get("zone", "unknown")
     
+    # Building a sophisticated prompt for Gemini
     prompt_text = f"""
-    Analyze these sensor readings and media from a hotel zone: '{zone}'.
-    Sensors: {json.dumps(sensors)}
+    You are the 'Sentinel AI' core for a high-security automated venue. 
+    Analyze the following real-time sensor telemetry from Zone: '{zone}'.
     
-    Determine if there is a crisis (fire, gas_leak, earthquake, security, water_leak, air_quality).
-    Respond ONLY with a JSON object:
+    Telemetry Data: {json.dumps(sensors)}
+    
+    TASKS:
+    1. Determine if a crisis is occurring (fire, gas_leak, earthquake, security, water_leak, air_quality).
+    2. Provide an algorithmic confidence score (0.0 to 1.0).
+    3. Generate a 'Situational Summary' - a 1-sentence briefing for human responders.
+    4. Provide reasoning for your classification.
+
+    Respond ONLY with a valid JSON object:
     {{
         "crisis_detected": boolean,
-        "crisis_type": string (one of the above or "other"),
-        "confidence_score": float (0.0 to 1.0),
-        "reasoning": string (brief explanation)
+        "crisis_type": "fire" | "gas_leak" | "earthquake" | "security" | "water_leak" | "air_quality" | "other",
+        "confidence_score": float,
+        "summary": "string",
+        "reasoning": "string"
     }}
     """
 
-    content = [{"text": prompt_text}]
-
-    # Process base64 image (DISABLED FOR NOW)
-    # if "media" in evidence and evidence["media"].get("photo"):
-    #     raw_photo = str(evidence["media"]["photo"]).strip()
-    #     
-    #     # Robustly strip prefix if present (e.g. data:image/png;base64,)
-    #     if "," in raw_photo:
-    #         photo_data = raw_photo.split(",")[1]
-    #     else:
-    #         photo_data = raw_photo
-    #         
-    #     try:
-    #         # Bedrock Converse API wants raw bytes
-    #         image_bytes = base64.b64decode(photo_data)
-    #         
-    #         # Detect format by sniffing headers
-    #         if photo_data.startswith("iVBOR"):
-    #             mime_format = "png"
-    #         elif photo_data.startswith("/9j/"):
-    #             mime_format = "jpeg"
-    #         elif photo_data.startswith("UklGR"):
-    #             mime_format = "webp"
-    #         else:
-    #             mime_format = "png" # Default fallback
-    #         
-    #         content.append({
-    #             "image": {
-    #                 "format": mime_format,
-    #                 "source": {"bytes": image_bytes}
-    #             }
-    #         })
-    #     except Exception as e:
-    #         print(f"[AI ERROR] Base64 image decoding failed: {e}")
-
     try:
-        response = bedrock_client.converse(
-            modelId=AWS_MODEL_ID,
-            messages=[{"role": "user", "content": content}],
-            inferenceConfig={
-                "maxTokens": 1000,
-                "temperature": 0.1
-            }
+        # Use Gemini Flash-Lite for cost-efficient, high-speed classification
+        response = client.models.generate_content(
+            model="gemini-flash-lite-latest",
+            contents=prompt_text,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
         )
         
-        raw_text = response['output']['message']['content'][0]['text'].strip()
-        
-        # Clean Markdown
-        if raw_text.startswith("```json"):
-            raw_text = raw_text[7:-3].strip()
-        elif raw_text.startswith("```"):
-            raw_text = raw_text[3:-3].strip()
-            
+        # The SDK handles JSON parsing if response_mime_type is set, but we'll be safe
+        raw_text = response.text.strip()
         return json.loads(raw_text)
+        
     except Exception as e:
-        print(f"[AI ERROR] Bedrock classification failed: {e}")
+        print(f"[AI ERROR] Gemini classification failed: {e}")
         return {"crisis_detected": False, "error": str(e)}
 
 # Serializes MongoDB BSON types to JSON-friendly formats
@@ -186,7 +145,7 @@ def main():
             device_id = evidence.get("device_id", "unknown")
             zone = evidence.get("location", {}).get("zone", "unknown")
 
-            print(f"[AI] Analyzing {device_id}@{zone} via {AWS_MODEL_ID}...")
+            print(f"[AI] Analyzing {device_id}@{zone} via Google Gemini Flash-Lite...")
             classification = classify_with_ai(evidence)
 
             if not classification.get("crisis_detected"):
@@ -194,13 +153,14 @@ def main():
                 print(f"[AI] No crisis: {reason}")
                 continue
 
-            crisis_type = classification["crisis_type"]
-            CONFIDENCE_SCORES = [0.2, 0.39,0.5]
-            if "cycle_idx" not in locals():
-                cycle_idx = 0
-            confidence = CONFIDENCE_SCORES[cycle_idx]
-            cycle_idx = (cycle_idx + 1) % len(CONFIDENCE_SCORES)
-            print(f"[AI] ALERT: {crisis_type} detected (CYCLING CONFIDENCE: {confidence})")
+            # Native confidence and summary from Gemini
+            crisis_type = classification.get("crisis_type", "other")
+            confidence = classification.get("confidence_score", 0.0)
+            summary = classification.get("summary", "Manual intervention suggested.")
+            
+            print(f"[AI] ALERT: {crisis_type} detected (Confidence: {confidence})")
+            print(f"[AI] Summary: {summary}")
+
             venue, crisis = get_venue_and_crisis_details(mongo_db, venue_id, crisis_type)
             if not crisis:
                 print(f"[AI ERROR] Unknown crisis type '{crisis_type}'. Using 'other'.")
@@ -211,6 +171,7 @@ def main():
                 "venue": ObjectId(venue_id) if venue_id else None,
                 "crisis": crisis["_id"] if crisis else None,
                 "confidence_score": confidence,
+                "summary": summary,
                 "status": "active",
                 "zones": [zone],
                 "created_at": datetime.utcnow()
@@ -224,6 +185,7 @@ def main():
                 "crisis_detected": True,
                 "crisis_type": crisis_type,
                 "confidence_score": confidence,
+                "summary": summary,
                 "venue_details": format_doc(venue),
                 "crisis_details": format_doc(crisis),
                 "status": "active"
@@ -233,7 +195,7 @@ def main():
             print(f"[AI] Crisis Pushed to Result Queue!")
 
         except KeyboardInterrupt:
-            print("\nShutting down AI worker...")
+            print("\nShutting down Sentinel AI...")
             break
         except Exception as e:
             print(f"[AI ERROR] Loop error: {e}")
