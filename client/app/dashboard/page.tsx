@@ -13,19 +13,29 @@ export default function Dashboard() {
 
   useEffect(() => {
     setMounted(true);
-    if (!auth.accessToken) {
+    if (!auth.isLoading && !auth.accessToken) {
       router.push("/login");
     }
-  }, [auth, router]);
+  }, [auth.accessToken, auth.isLoading, router]);
+
+  if (!mounted || auth.isLoading) {
+    return (
+      <div className="flex h-[calc(100vh-100px)] items-center justify-center">
+        <div className="text-primary italic animate-pulse tracking-widest font-bold">
+          INITIALIZING SECURE SESSION...
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-[1400px] p-6 text-foreground">
       <div className="mb-8 flex items-end justify-between">
         <div>
-          <h1 className="headline text-4xl font-extrabold text-primary tracking-tight">
+          <h1 className="headline text-4xl font-extrabold tracking-tight bg-gradient-to-br from-primary via-primary/80 to-blue-600 bg-clip-text text-transparent">
             COMMAND CENTER
           </h1>
-          <p className="mt-1 text-sm tracking-widest text-muted-foreground">
+          <p className="mt-1 text-sm tracking-widest text-muted-foreground font-medium">
             NODE: {mounted ? (auth.venue_id?.toUpperCase() || 'OFFLINE') : '...'} | SECTOR: ALPHA-1
           </p>
         </div>

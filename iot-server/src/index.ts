@@ -9,6 +9,7 @@ import deviceRoutes from "./routes/device.routes.js";
 import simulatorRoutes from "./routes/simulator.routes.js";
 import { logger } from "./utils/logger.js";
 import { startRedisListener, getPauseState, getPauseRemainingMs } from "./services/redis_listener.service.js";
+import { getLastSensorPayload } from "./services/transmitter.service.js";
 
 const app = express();
 
@@ -19,7 +20,22 @@ app.use("/api", simulatorRoutes);
 
 export const wss = new WebSocketServer({ noServer: true });
 
-wss.on("connection", (ws) => {
+wss.on("connection", async (ws, req) => {
+    let venue_id: string | undefined;
+    try {
+        const urlParams = new URL(req.url || '', `http://${req.headers.host}`);
+        venue_id = urlParams.searchParams.get('venue_id') || undefined;
+    } catch (e) {
+        logger.error("Error parsing WS URL for venue_id");
+    }
+
+    // 1. Instantly provide the last known sensor snapshot from Redis
+    const lastPayload = await getLastSensorPayload(venue_id);
+    if (lastPayload) {
+        ws.send(JSON.stringify({ type: "sensor_data", payload: lastPayload }));
+    }
+
+    // 2. Inform the client if we are currently parked (paused) in an incident
     if (getPauseState()) {
         const remaining = getPauseRemainingMs();
         if (remaining > 0) {

@@ -128,6 +128,22 @@ html, body {
   overflow-x: hidden;
 }
 
+/* ===== CUSTOM SCROLLBAR ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--sidebar-border);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.50 0.1 260);
+}
+
 h1, h2, h3, .headline {
   font-family: 'Manrope', sans-serif;
   letter-spacing: -0.02em;

@@ -90,6 +90,7 @@ A real-time crisis detection platform for hospitality venues (hotels, resorts, c
 6. Admin approves → pushes to Redis admin_approved queue → SMS sent
 7. Crisis auto-resolves when active_crisis:* key expires (10 min TTL)
    → primary-server detects via keyspace notification → sends crisis_resolved via WebSocket
+8. **State Recovery**: Newly connected clients receive a "burst" of current state data from Redis caches on port 3000 and 4000.
 ```
 
 ## Crisis Deduplication
@@ -139,6 +140,8 @@ Catches crises that build slowly (fire without instant smoke):
 |---------|---------|-----|
 | `active_crisis:{venue}:{zone}:{type}` | Crisis dedup session | 10 min |
 | `trend:{venue}:{zone}:{metric}` | Rolling sensor values | 2 min |
+| `active_crisis_cache:{venue_id}` | Persistent crisis manual review state | 15 min |
+| `last_telemetry:{venue_id}` | Last sensor payload before pause | 1 hour |
 
 ### Pub/Sub
 

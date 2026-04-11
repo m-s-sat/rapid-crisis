@@ -54,7 +54,7 @@ flowchart TD
 
     subgraph STORAGE["💾 Databases"]
         MONGODB[("MongoDB\n• venues\n• crisis_types\n• ai_responses\n• sensor_evidences")]
-        REDIS[("Redis\n• ai_evidence_queue\n• ai_result_queue\n• admin_approved\n• active_crisis:*\n• trend:*")]
+        REDIS[("Redis\n• Queues\n• Active Sessions\n• State Cache (15m/1h)\n• Trend Tracking")]
     end
 
     ESP -->|"CrisisEvidencePayload\n(sensors + media)"| API
@@ -104,6 +104,8 @@ flowchart TD
     QUEUE_PUSH --> REDIS
     LPUSH_RESULT --> REDIS
     NEW_CRISIS --> REDIS
+    API -->|"SET state_cache"| REDIS
+    SENSOR -->|"SET telemetry_cache"| REDIS
 
     style IOT fill:#1a1a2e,stroke:#e94560,color:#fff
     style PRIMARY fill:#16213e,stroke:#0f3460,color:#fff
@@ -227,3 +229,23 @@ flowchart LR
     style Q2 fill:#e74c3c,stroke:#c0392b,color:#fff
     style Q3 fill:#f39c12,stroke:#d68910,color:#fff
 ```
+
+---
+
+## State Persistence & Replay
+
+To ensure architectural robustness across server reboots, critical states are mirrored in Redis rather than volatile in-memory storage.
+
+### Synchronous State Recovery
+When a client connects to the system via WebSocket, the server performs an **immediate state reply**:
+1. **IoT Gateway (Port 4000)**: Fetches `last_telemetry:{venue_id}` from Redis and broadcasts it.
+2. **Primary Server (Port 3000)**: Fetches `active_crisis_cache:{venue_id}` from Redis and broadcasts any pending manual review requests.
+
+This ensures that the "Operational Picture" is consistent for all users, regardless of when they join or if a backend service recently restarted.
+
+### Redis Cache Schema
+
+| Key | Value Type | TTL | Purpose |
+|-----|------------|-----|---------|
+| `active_crisis_cache:{id}` | JSON String | 15m | Preserves "Activate Protocol" state for dashboards |
+| `last_telemetry:{id}` | JSON String | 1h | Preserves the sensor snapshot that triggered a pause |

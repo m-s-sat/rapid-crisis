@@ -4,7 +4,17 @@ import { wss } from "../index.js";
 import { captureAllMedia } from "./media.service.js";
 import type { CrisisEvidencePayload, SensorReading } from "../types/sensor.types.js";
 
+import { redisManagerInstance } from "../db/redis.js";
+
 const AI_PROCESS_URL = `${env.PRIMARY_SERVER_URL}/api/ai/process`;
+
+export async function getLastSensorPayload(venue_id?: string): Promise<CrisisEvidencePayload | null> {
+    const redis = await redisManagerInstance.getClient();
+    if (!redis) return null;
+    const key = venue_id ? `last_telemetry:${venue_id}` : `last_telemetry:global`;
+    const cached = await redis.get(key);
+    return cached ? JSON.parse(cached) : null;
+}
 
 export async function transmitReading(reading: SensorReading): Promise<void> {
     logger.info(`${reading.device_id} | temp=${reading.sensors.temperature_c}°C smoke=${reading.sensors.smoke_ppm}ppm vib=${reading.sensors.vibration_g}g`);
@@ -20,6 +30,14 @@ export async function transmitReading(reading: SensorReading): Promise<void> {
         sensors: reading.sensors,
         media,
     };
+
+    // Cache the telemetry in Redis for reconnecting clients
+    redisManagerInstance.getClient().then(redis => {
+        if (redis) {
+            redis.set(`last_telemetry:${payload.venue_id}`, JSON.stringify(payload), { EX: 3600 });
+            redis.set(`last_telemetry:global`, JSON.stringify(payload), { EX: 3600 });
+        }
+    });
 
     // Broadcast directly to local connected frontend clients via WS!
     const wsPayload = JSON.stringify({ type: 'sensor_data', payload });

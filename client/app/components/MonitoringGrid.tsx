@@ -66,10 +66,14 @@ export const MonitoringGrid = () => {
         {/* Sensor Grid */}
         <div className={`grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 transition-opacity duration-300 ${isPaused ? 'opacity-50' : ''}`}>
           {sensorStats.map((stat, i) => (
-            <Card key={i} className="bg-card/60 backdrop-blur-sm border-border/30 hover:bg-card/80 transition-all">
+            <Card 
+              key={i} 
+              className="bg-card/60 backdrop-blur-md border-border/30 transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-primary/10 hover:border-primary/40 hover:bg-card/80 animate-in fade-in slide-in-from-bottom-4"
+              style={{ animationFillMode: "both", animationDelay: `${i * 50}ms` }}
+            >
               <CardContent className="pt-4 pb-4 text-center">
-                <p className="text-[0.65rem] uppercase tracking-wider text-muted-foreground mb-1.5">{stat.label}</p>
-                <p className={`text-xl font-bold ${stat.color}`}>{stat.value}</p>
+                <p className="text-[0.65rem] uppercase tracking-wider text-muted-foreground mb-1.5 font-medium">{stat.label}</p>
+                <p className={`text-xl font-bold ${stat.color} drop-shadow-md`}>{stat.value}</p>
               </CardContent>
             </Card>
           ))}
@@ -121,7 +125,7 @@ export const MonitoringGrid = () => {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-semibold tracking-wide">SYSTEM ACTIVITY HUB</CardTitle>
           </CardHeader>
-          <CardContent className="flex-1 overflow-y-auto flex flex-col gap-3">
+          <CardContent className="h-[350px] overflow-y-auto flex flex-col gap-3 pr-2 scrollbar-thin">
             {messages.length === 0 ? (
               <p className="text-muted-foreground italic text-sm">
                 Monitoring protocols active. Awaiting telemetry data...

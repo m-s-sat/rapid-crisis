@@ -100,6 +100,27 @@ Sent when the 15-minute admin decision window expires without action.
 
 **Client action**: Remove or disable the approval card for that crisis.
 
+#### 4. `sensor_data` — Real-Time Telemetry Data
+
+Sent continuously (every 10s) from the IoT server (port 4000). Also sent immediately upon connection as a "State Replay".
+
+```json
+{
+    "type": "sensor_data",
+    "payload": {
+        "device_id": "ESP32-001",
+        "timestamp": "2026-04-11T12:00:00Z",
+        "sensors": {
+            "temperature_c": 24.5,
+            "smoke_ppm": 12.0
+            ...
+        }
+    }
+}
+```
+
+**Client action**: Update the dashboard grid cards and charts.
+
 ---
 
 ## REST API Endpoints
@@ -325,3 +346,12 @@ Stop all cron jobs.
 | `crisis_types` | Crisis type definitions (fire, gas_leak, etc.) |
 | `ai_responses` | AI classification results with confidence scores |
 | `sensor_evidences` | Raw IoT sensor + media payloads for audit/replay |
+
+---
+
+## Initial State Synchronization
+
+To provide a seamless UX, the system implements a "State Replay" pattern. Upon initial WebSocket connection, the client will receive:
+
+1. **Telemetry Snapshot**: The `iot-server` (port 4000) sends the message `type: "sensor_data"` containing the last known sensor state from Redis.
+2. **Active Crisis Logic**: If a crisis was already in progress (e.g., awaiting decision), the `primary-server` (port 3000) sends `type: "decided_by_admin"` immediately, ensuring the action buttons are rendered without waiting for new AI classifications.

@@ -16,15 +16,15 @@ const RESET_REDIS_EXPIRY = 15 * 60; // 15 minutes in seconds
 
 const ACCESS_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: true, // Always secure as per strategy
-  sameSite: "strict" as const,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
   maxAge: 15 * 60 * 1000, 
 };
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: true,
-  sameSite: "strict" as const,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
   path: "/api/auth", // Changed from "/api/auth/refresh" to allow logout to see it too
   maxAge: 7 * 24 * 60 * 60 * 1000,
 };

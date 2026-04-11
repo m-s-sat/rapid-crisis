@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSelector } from "react-redux";
 import { useRegisterMutation } from "../../lib/features/auth/authApiSlice";
 import { useDispatch } from "react-redux";
 import { setCredentials } from "../../lib/features/auth/authSlice";
@@ -25,9 +26,26 @@ export default function Register() {
     password: "",
   });
 
+  const { accessToken, isLoading: authLoading } = useSelector((state: any) => state.auth);
   const [register, { isLoading, error }] = useRegisterMutation();
   const dispatch = useDispatch();
   const router = useRouter();
+
+  useEffect(() => {
+    if (!authLoading && accessToken) {
+      router.push("/dashboard");
+    }
+  }, [accessToken, authLoading, router]);
+
+  if (authLoading || accessToken) {
+    return (
+      <div className="flex h-[calc(100vh-100px)] items-center justify-center">
+        <div className="text-primary italic animate-pulse tracking-widest font-bold">
+          VERIFYING SECURITY CONTEXT...
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

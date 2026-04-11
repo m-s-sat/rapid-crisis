@@ -23,8 +23,9 @@ export const AppLayout = ({ children }: Props) => {
         <MonitorProvider>
           {!isAuthPage && <Sidebar />}
           <div
-            className="flex min-h-screen flex-col transition-all duration-300"
-            style={{ marginLeft: isAuthPage ? '0' : '280px' }}
+            className={`flex min-h-screen flex-col transition-all duration-300 ${
+              isAuthPage ? "ml-0" : "ml-0 lg:ml-[280px]"
+            }`}
           >
             {!isAuthPage && <Header />}
             <main className={`flex-1 ${isAuthPage ? "p-0" : "p-6"}`}>

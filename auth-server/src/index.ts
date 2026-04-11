@@ -10,10 +10,9 @@ import authRoutes from './routes/auth.routes.js';
 
 const app = express();
 
-// Security Headers
-app.use(helmet());
+app.set('trust proxy', 1);
 
-// Global Rate Limiter for general traffic
+app.use(helmet());
 const globalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,

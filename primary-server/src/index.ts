@@ -35,7 +35,9 @@ interface CustomWebSocket extends WebSocket {
     venue_id?: string;
 }
 
-wss.on('connection', (ws: CustomWebSocket, req) => {
+// Removing in-memory Map in favor of Redis caching
+
+wss.on('connection', async (ws: CustomWebSocket, req) => {
     ws.on('error', console.error);
     
     try {
@@ -43,6 +45,15 @@ wss.on('connection', (ws: CustomWebSocket, req) => {
         const venue_id = urlParams.searchParams.get('venue_id');
         if (venue_id) {
             ws.venue_id = venue_id;
+            
+            // Send cached crisis from Redis if it exists for this venue
+            const redis = await redisManagerInstance.getClient();
+            if (redis) {
+                const cached = await redis.get(`active_crisis_cache:${venue_id}`);
+                if (cached) {
+                    ws.send(cached);
+                }
+            }
         }
     } catch (err) {
         console.error("Error parsing WS URL: ", err);
@@ -77,9 +88,19 @@ async function startServer() {
                 
                 if (parsed.type === 'decided_by_admin' && parsed.payload && parsed.payload.crisis_details) {
                     const crisisId = parsed.payload.crisis_details._id || parsed.payload.crisis_details;
+                    
+                    // Cache the crisis in Redis for reconnecting clients (15 min expiry)
+                    redisManagerInstance.getClient().then(redis => {
+                        if (redis && targetVenueId) redis.set(`active_crisis_cache:${targetVenueId}`, message, { EX: 900 });
+                    });
 
-                    const timeoutId = setTimeout(() => {
+                    const timeoutId = setTimeout(async () => {
                         activeTimeouts.delete(crisisId);
+                        
+                        // Clear from Redis on expiry
+                        const redis = await redisManagerInstance.getClient();
+                        if (redis && targetVenueId) await redis.del(`active_crisis_cache:${targetVenueId}`);
+
                         wss.clients.forEach((client: any) => {
                             if (client.readyState === WebSocket.OPEN && client.venue_id === targetVenueId) {
                                 client.send(JSON.stringify({
@@ -108,6 +129,9 @@ async function startServer() {
                 }
 
                 if (parsed.type === 'sent') {
+                    redisManagerInstance.getClient().then(redis => {
+                        if (redis && targetVenueId) redis.del(`active_crisis_cache:${targetVenueId}`);
+                    });
                     wss.clients.forEach((client: any) => {
                         if (client.readyState === WebSocket.OPEN && (!targetVenueId || client.venue_id === targetVenueId)) {
                             client.send(JSON.stringify({
@@ -126,12 +150,21 @@ async function startServer() {
                 }
 
                 if (parsed.type === 'resume') {
+                    redisManagerInstance.getClient().then(redis => {
+                        if (redis && targetVenueId) redis.del(`active_crisis_cache:${targetVenueId}`);
+                    });
                     wss.clients.forEach((client: any) => {
                         if (client.readyState === WebSocket.OPEN) {
                             client.send(JSON.stringify({ type: 'pause_ended' }));
                         }
                     });
                     return;
+                }
+
+                if (parsed.type === 'crisis_detected' || parsed.type === 'crisis_update') {
+                    redisManagerInstance.getClient().then(redis => {
+                        if (redis && targetVenueId) redis.set(`active_crisis_cache:${targetVenueId}`, message, { EX: 900 });
+                    });
                 }
 
                 wss.clients.forEach((client: any) => {

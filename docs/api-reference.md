@@ -241,6 +241,12 @@ ws://localhost:3000?venue_id={venue_id}
 | `decided_by_admin` | Server → Client | Crisis needs admin decision (0.40–0.70 confidence) |
 | `sent` | Server → Client | SMS alerts dispatched |
 | `expired` | Server → Client | 15-min admin decision window expired |
+| `sensor_data` | Server → Client | Real-time sensor telemetry (Port 4000) |
+| `pause_started` | Server → Client | Telemetry stream paused during crisis |
+| `pause_ended` | Server → Client | Telemetry stream resumed |
+
+> [!NOTE]
+> **Async Connection Handlers**: WebSocket connection handlers in both the Primary and IoT servers are `async`. They perform an immediate Redis lookup upon client handshake to replay the current system state.
 
 ---
 
