@@ -17,7 +17,10 @@ export const makeStore = () => {
     // Adding the api middleware enables caching, invalidation, polling,
     // and other useful features of `rtk-query`.
     middleware: (getDefaultMiddleware) => {
-      return getDefaultMiddleware().concat(apiSlice.middleware);
+      return getDefaultMiddleware({
+        immutableCheck: { warnAfter: 256 },
+        serializableCheck: false,
+      }).concat(apiSlice.middleware);
     },
   });
 };
