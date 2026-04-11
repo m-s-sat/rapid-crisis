@@ -1,0 +1,107 @@
+services:
+  mongodb:
+    image: mongo:6.0
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - client
+      - auth-server
+      - primary-server
+      - iot-server
+
+  auth-server:
+    build:
+      context: ./auth-server
+    container_name: auth-server
+    environment:
+      - PORT=3001
+      - MONGO_URI=mongodb://mongodb:27017/google-solutions
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=production
+      - JWT_ACCESS_SECRET=sentinel_access_secret_2026_x99
+      - JWT_REFRESH_SECRET=sentinel_refresh_secret_2026_y88
+      - FRONTEND_URL=http://localhost
+    depends_on:
+      - mongodb
+      - redis
+
+  primary-server:
+    build:
+      context: ./primary-server
+    container_name: primary-server
+    environment:
+      - PORT=3002
+      - MONGO_URI=mongodb://mongodb:27017/google-solutions
+      - REDIS_URL=redis://redis:6379
+      - SESSION_SECRET=default_secret_key
+    depends_on:
+      - mongodb
+      - redis
+
+  worker-server:
+    build:
+      context: ./worker-server
+    container_name: worker-server
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - MONGO_URI=mongodb://mongodb:27017/google-solutions
+    depends_on:
+      - mongodb
+      - redis
+
+  iot-server:
+    build:
+      context: ./iot-server
+    container_name: iot-server
+    environment:
+      - PORT=4000
+      - MONGO_URI=mongodb://mongodb:27017/google-solutions
+      - REDIS_URL=redis://redis:6379
+      - PRIMARY_SERVER_URL=http://primary-server:3002
+    depends_on:
+      - mongodb
+      - redis
+
+  ai-worker:
+    build:
+      context: ./ai
+    container_name: ai-worker
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/google-solutions
+      - REDIS_URL=redis://redis:6379
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+    depends_on:
+      - mongodb
+      - redis
+
+  client:
+    build:
+      context: ./client
+    container_name: client
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost/api
+      - NEXT_PUBLIC_AUTH_URL=http://localhost/auth
+    depends_on:
+      - auth-server
+      - primary-server
+
+volumes:
+  mongodb_data:

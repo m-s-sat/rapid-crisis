@@ -184,9 +184,10 @@ const SENSOR_GENERATORS: Record<CrisisType, () => SensorSnapshot> = {
     other: ambientSensors,
 };
 
-const PHOTO_FILE_PATH = path.join(__dirname, "../../../ai/fire_crisis_scene_base64_with_prefix.txt");
+// const PHOTO_FILE_PATH = path.join(__dirname, "../../../ai/fire_crisis_scene_base64_with_prefix.txt");
 let DUMMY_PHOTO = "";
 
+/*
 try {
     if (fs.existsSync(PHOTO_FILE_PATH)) {
         DUMMY_PHOTO = fs.readFileSync(PHOTO_FILE_PATH, "utf8").trim();
@@ -197,6 +198,7 @@ try {
 } catch (err: any) {
     logger.error(`Error reading high-res photo: ${err.message}`);
 }
+*/
 
 const PROFILE_WEIGHTS: { profile: CrisisType; weight: number }[] = [
     { profile: "fire", weight: 1.0 },
