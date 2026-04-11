@@ -22,7 +22,9 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
   let result = await baseQuery(args, api, extraOptions);
 
   // If unauthorized, try to refresh
-  if (result.error && (result.error.status === 401 || result.error.status === 403)) {
+  const isRefresh = (typeof args === "string" ? args : args.url).includes("/auth/refresh");
+
+  if (result.error && (result.error.status === 401 || result.error.status === 403) && !isRefresh) {
     const refreshResult: any = await baseQuery(
       {
         url: "/auth/refresh",

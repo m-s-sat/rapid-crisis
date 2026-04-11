@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 export default function GuestRegistry() {
   const [page, setPage] = useState(1);
@@ -100,14 +101,23 @@ export default function GuestRegistry() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data?.guests?.length === 0 && (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={4} className="py-20 text-center">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Retrieving Guest Registry...</p>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : data?.guests?.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="text-center text-muted-foreground py-8 italic">
                   No guests registered. Click "New Check-In" to add one.
                 </TableCell>
               </TableRow>
-            )}
-            {data?.guests?.map((guest: any) => (
+            ) : null}
+            {!isLoading && data?.guests?.map((guest: any) => (
               <TableRow key={guest._id} className="border-border/20 hover:bg-muted/30 transition-colors">
                 <TableCell className="font-medium">{guest.name}</TableCell>
                 <TableCell className="text-muted-foreground">{guest.room_id}</TableCell>

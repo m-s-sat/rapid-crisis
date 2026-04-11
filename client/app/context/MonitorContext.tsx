@@ -172,6 +172,7 @@ export const MonitorProvider = ({ children }: { children: ReactNode }) => {
 
           const crisisType = payload.crisis_type || "Unknown";
           const zone = payload.zone || (payload.zones ? payload.zones[0] : "unknown");
+
           const confidence = payload.confidence_score;
 
           addMessage({
@@ -199,6 +200,7 @@ export const MonitorProvider = ({ children }: { children: ReactNode }) => {
           });
         } else if (data.type === "crisis_resolved") {
           setActiveCrisis(null);
+          const zone = data.zone || "unknown";
           addMessage({
             type: "info",
             text: data.message || `${data.crisis_type || "Crisis"} has been auto-resolved.`,

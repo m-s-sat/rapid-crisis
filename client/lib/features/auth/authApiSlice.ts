@@ -17,13 +17,15 @@ export const authApiSlice = apiSlice.injectEndpoints({
       }),
     }),
     refresh: builder.mutation({
-      query: (token) => ({
+      query: () => ({
         url: "/auth/refresh",
         method: "POST",
-        body: { token },
       }),
+    }),
+    getMe: builder.query({
+      query: () => "/auth/me",
     }),
   }),
 });
 
-export const { useLoginMutation, useRegisterMutation, useRefreshMutation } = authApiSlice;
+export const { useLoginMutation, useRegisterMutation, useRefreshMutation, useGetMeQuery } = authApiSlice;

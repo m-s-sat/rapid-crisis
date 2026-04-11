@@ -51,6 +51,8 @@ services:
       - MONGO_URI=mongodb://mongodb:27017/google-solutions
       - REDIS_URL=redis://redis:6379
       - SESSION_SECRET=default_secret_key
+      - JWT_ACCESS_SECRET=sentinel_access_secret_2026_x99
+      - JWT_REFRESH_SECRET=sentinel_refresh_secret_2026_y88
     depends_on:
       - mongodb
       - redis
@@ -62,6 +64,8 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - MONGO_URI=mongodb://mongodb:27017/google-solutions
+      - JWT_ACCESS_SECRET=sentinel_access_secret_2026_x99
+      - JWT_REFRESH_SECRET=sentinel_refresh_secret_2026_y88
     depends_on:
       - mongodb
       - redis

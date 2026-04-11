@@ -17,9 +17,7 @@ from main import (
     MediaCapture,
     CrisisEvidencePayload,
     CrisisClassification,
-    image_bytes_to_message,
-    audio_bytes_to_message,
-    video_bytes_to_message,
+    media_to_message,
     json_serializer,
     format_doc,
     get_venue_and_crisis_details,
@@ -61,31 +59,41 @@ def test_payload_validation():
 
 # --- 2. Media Conversion Logic Tests ---
 
-def test_image_bytes_to_message():
-    raw_bytes = b"fake_image_data"
-    msg = image_bytes_to_message(raw_bytes)
+def test_media_to_message_image_data_uri():
+    data_uri = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+    msg = media_to_message(data_uri, "image")
     
     content = msg.content[0]
     assert content["type"] == "image_url"
-    assert "data:image/jpeg;base64," in content["image_url"]["url"]
+    assert content["image_url"]["url"] == data_uri
 
-def test_audio_bytes_to_message():
-    raw_bytes = b"fake_audio_data"
-    msg = audio_bytes_to_message(raw_bytes)
+def test_media_to_message_image_pure_b64():
+    pure_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg=="
+    msg = media_to_message(pure_b64, "image", mime_type="image/png")
+    
+    content = msg.content[0]
+    assert content["type"] == "image_url"
+    assert content["image_url"]["url"] == f"data:image/png;base64,{pure_b64}"
+
+def test_media_to_message_audio_data_uri():
+    # Simulate a data URI for audio
+    pure_b64 = "fake_audio_data"
+    data_uri = f"data:audio/mp3;base64,{pure_b64}"
+    msg = media_to_message(data_uri, "audio")
     
     content = msg.content[0]
     assert content["type"] == "media"
     assert content["mime_type"] == "audio/mp3"
-    assert content["data"] == base64.b64encode(raw_bytes).decode("utf-8")
+    assert content["data"] == pure_b64
 
-def test_video_bytes_to_message():
-    raw_bytes = b"fake_video_data"
-    msg = video_bytes_to_message(raw_bytes)
+def test_media_to_message_audio_pure_b64():
+    pure_b64 = "fake_audio_data"
+    msg = media_to_message(pure_b64, "audio", mime_type="audio/wav")
     
     content = msg.content[0]
     assert content["type"] == "media"
-    assert content["mime_type"] == "video/mp4"
-    assert content["data"] == base64.b64encode(raw_bytes).decode("utf-8")
+    assert content["mime_type"] == "audio/wav"
+    assert content["data"] == pure_b64
 
 # --- 3. Serialization and Formatting Tests ---
 
@@ -121,14 +129,12 @@ async def test_get_venue_and_crisis_details():
     mock_db.venues.find_one.assert_called_once()
     mock_db.crisis_types.find_one.assert_called_once()
 
-# --- 5. AI Classification Tests (Mocking LangChain) ---
-
-# --- 5. AI Classification Tests (Mocking LangChain) ---
+# --- 5. AI Classification Tests (Mocking ChatOpenAI/OpenRouter) ---
 
 @pytest.mark.asyncio
-@patch("main.llm", create=True) # Added create=True to force the mock into the namespace
+@patch("main.llm", create=True) # Patching the structured LLM instance
 async def test_classify_with_ai(mock_llm):
-    # Setup mock LLM response (simulating the Pydantic structured output)
+    # Setup mock LLM response (simulating the Pydantic structured output from OpenRouter)
     mock_response = CrisisClassification(
         crisis_detected=True,
         crisis_type="fire",
@@ -136,7 +142,7 @@ async def test_classify_with_ai(mock_llm):
         summary="Smoke and fire detected in the Lobby.",
         reasoning="Sensors indicate extreme heat and smoke; visual confirmation via media."
     )
-    # The MagicMock needs its ainvoke method to be an AsyncMock
+    # The ChatOpenAI wrapper's ainvoke method returns our structured pydantic model
     mock_llm.ainvoke = AsyncMock(return_value=mock_response)
     
     # Python objects (like MagicMock) evaluate to True, so this will pass the 'if not llm:' check
@@ -202,8 +208,14 @@ async def test_main_loop(mock_get_details, mock_classify, mock_mongo_client, moc
     mock_crisis = {"_id": ObjectId(), "type": "fire"}
     mock_get_details.return_value = (mock_venue, mock_crisis)
 
-    # Run the main loop (it will stop automatically due to CancelledError)
-    await sentinel_main()
+    # Run the main loop
+    try:
+        await sentinel_main()
+    except asyncio.CancelledError:
+        pass
+
+    # Allow background tasks (created via create_task) to finish
+    await asyncio.sleep(0.1)
 
     # --- Assertions ---
     

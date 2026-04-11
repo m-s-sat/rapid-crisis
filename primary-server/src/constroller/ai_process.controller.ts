@@ -62,8 +62,25 @@ export async function processAiEvidence(req: Request, res: Response): Promise<an
         const hasTrend = trends.length > 0;
 
         if (isSpiking || hasTrend) {
-            console.log(`[AI-TRIGGER] ${payload.location.zone}: Sensor spike or trend detected. Queueing for AWS Bedrock analysis.`);
-            await redisClient.lPush("ai_evidence_queue", JSON.stringify(payload));
+            // BACKPRESSURE GUARD: Check for AI Lockout (1 analysis per 60s per zone)
+            const lockoutKey = `ai_lockout:${payload.venue_id}:${payload.location.zone}`;
+            const isLocked = await redisClient.set(lockoutKey, "1", { NX: true, EX: 60 });
+
+            if (isLocked) {
+                console.log(`[AI-TRIGGER] ${payload.location.zone}: Queueing for analysis. Dispatching 'started' signal.`);
+                
+                // Signal to frontend that AI is now "Thinking"
+                await redisClient.publish("messaging_status", JSON.stringify({
+                    type: "ai_analysis_started",
+                    venue_id: payload.venue_id,
+                    zone: payload.location.zone,
+                    timestamp: Date.now()
+                }));
+
+                await redisClient.lPush("ai_evidence_queue", JSON.stringify(payload));
+            } else {
+                console.log(`[AI-LOCKOUT] ${payload.location.zone}: Analysis already in progress. Skipping redundant queue.`);
+            }
         } else {
             console.log(`[AI-FILTER] ${payload.location.zone}: Normal readings. Skipping AI analysis to save credits.`);
         }

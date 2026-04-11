@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 
 function formatCountdown(ms: number): string {
   const totalSeconds = Math.floor(ms / 1000);
@@ -15,6 +17,14 @@ function formatCountdown(ms: number): string {
 
 export const MonitoringGrid = () => {
   const { sensorData, activeCrisis, messages, handleAdminDecision, isPaused, pauseTimeRemaining } = useMonitorContext();
+  const [, setTick] = useState(0);
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
+
+  // Force re-render every second to update 'Pending' and 'Freshness' counters
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   const sensors = sensorData?.sensors;
   const sensorStats = [
@@ -29,10 +39,6 @@ export const MonitoringGrid = () => {
     { label: "Sound Level", value: sensors?.sound_db !== undefined ? `${sensors.sound_db.toFixed(1)} dB` : "--", color: "text-teal-400" },
     { label: "Vibration", value: sensors?.vibration_g !== undefined ? `${sensors.vibration_g.toFixed(2)} g` : "--", color: "text-yellow-500" },
     { label: "Water Level", value: sensors?.water_level_cm !== undefined ? `${sensors.water_level_cm.toFixed(1)} cm` : "--", color: "text-emerald-400" },
-    { label: "Presence", value: sensors?.motion_detected ? "DETECTED" : "NONE", color: sensors?.motion_detected ? "text-yellow-400" : "text-muted-foreground" },
-    { label: "Flame", value: sensors?.flame_detected ? "WARN" : "SAFE", color: sensors?.flame_detected ? "text-red-500" : "text-muted-foreground" },
-    { label: "Moisture", value: sensors?.moisture_detected ? "WARN" : "SAFE", color: sensors?.moisture_detected ? "text-blue-500" : "text-muted-foreground" },
-    { label: "Door", value: sensors?.door_open ? "OPEN" : "CLOSED", color: sensors?.door_open ? "text-yellow-400" : "text-muted-foreground" },
   ];
 
   return (
@@ -62,6 +68,7 @@ export const MonitoringGrid = () => {
             </div>
           </Alert>
         )}
+        
 
         {/* Sensor Grid */}
         <div className={`grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 transition-opacity duration-300 ${isPaused ? 'opacity-50' : ''}`}>
@@ -95,17 +102,72 @@ export const MonitoringGrid = () => {
               <p className="text-foreground mb-4">
                 Zone: <span className="font-semibold">{activeCrisis.zone || (activeCrisis.zones ? activeCrisis.zones[0] : "unknown")}</span>
                 {" | "}
-                Confidence: <Badge variant="destructive" className="ml-1">{(activeCrisis.confidence_score * 100).toFixed(0)}%</Badge>
+                Confidence: <Badge variant="destructive" className="ml-2">{(activeCrisis.confidence_score * 100).toFixed(0)}%</Badge>
               </p>
+
+              <div className="mb-4 grid grid-cols-2 gap-4 rounded-lg bg-background/40 p-3 border border-destructive/20">
+                <div>
+                  <p className="text-[0.6rem] uppercase text-muted-foreground font-bold mb-1">DATA FRESHNESS</p>
+                  <p className="text-sm font-mono text-destructive">
+                    {activeCrisis.source_timestamp ? `${Math.floor((Date.now() - new Date(activeCrisis.source_timestamp).getTime()) / 1000)}s ago` : 'Real-time'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[0.6rem] uppercase text-muted-foreground font-bold mb-1">ANALYSIS TIME</p>
+                  <p className="text-sm font-mono text-blue-400">
+                    {activeCrisis.analysis_duration ? `${activeCrisis.analysis_duration}s` : '--'}
+                  </p>
+                </div>
+              </div>
+
+              {/* AI Reasoning Section */}
+              <div className="mb-4 rounded-lg bg-blue-500/10 p-4 border border-blue-500/20">
+                <p className="text-[0.6rem] uppercase text-blue-400 font-bold mb-2 tracking-widest">SENTINEL AI ANALYSIS</p>
+                <p className="text-sm font-bold text-foreground mb-1">"{activeCrisis.summary}"</p>
+                <p className="text-xs text-muted-foreground leading-relaxed italic">{activeCrisis.reasoning}</p>
+              </div>
+
+              {/* Evidence Snapshot */}
+              {activeCrisis.trigger_sensors && (
+                <div className="mb-6">
+                  <p className="text-[0.6rem] uppercase text-muted-foreground font-bold mb-2 tracking-widest">EVIDENCE SNAPSHOT (AT TRIGGER)</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {Object.entries(activeCrisis.trigger_sensors).map(([key, value]: [string, any]) => {
+                      // Filter out known constant or non-metric sensors for cleaner UI
+                      if (['device_id', 'zone'].includes(key)) return null;
+                      if (typeof value !== 'number' && typeof value !== 'boolean') return null;
+                      
+                      return (
+                        <div key={key} className="rounded bg-muted/30 p-2 border border-border/20">
+                          <p className="text-[0.55rem] uppercase text-muted-foreground overflow-hidden text-ellipsis whitespace-nowrap">{key.replace(/_/g, ' ')}</p>
+                          <p className="text-[0.65rem] font-mono font-bold">
+                            {typeof value === 'number' ? value.toFixed(1) : (value ? 'YES' : 'NO')}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {activeCrisis.confidence_score < 0.7 && (
                 <div className="flex gap-3">
                   <Button
                     variant="destructive"
                     size="lg"
-                    className="font-bold"
-                    onClick={() => handleAdminDecision('approve', activeCrisis)}
+                    className="font-bold min-w-[200px]"
+                    disabled={isProcessingAction}
+                    onClick={async () => {
+                      setIsProcessingAction(true);
+                      try {
+                        await handleAdminDecision('approve', activeCrisis);
+                      } finally {
+                        setIsProcessingAction(false);
+                      }
+                    }}
                   >
-                    🚨 ACTIVATE PROTOCOL
+                    {isProcessingAction ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : '🚨'} ACTIVATE PROTOCOL
                   </Button>
                   <Button
                     variant="outline"

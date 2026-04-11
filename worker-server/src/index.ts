@@ -99,8 +99,6 @@ async function handleAiResult(result: any, redisClient: any) {
                 const mappedCrisis = crisisDetails || { type: crisisType };
                 await sendAlerts(venueDetails, mappedCrisis, zone, redisClient);
                 await markSmsSent(redisClient, venueId, zone, crisisType);
-            } else {
-                console.warn(`[SKIP-SMS] ${crisisType}@${zone}: No venueDetails found for ${venueId}. Is the database seeded?`);
             }
         } else if (updated.peak_confidence >= 0.40 && !updated.admin_notified) {
             await redisClient.publish("messaging_status", JSON.stringify({
@@ -114,6 +112,11 @@ async function handleAiResult(result: any, redisClient: any) {
                     zones: [zone],
                     crisis_type: crisisType,
                     crisis_session_id: updated.crisis_session_id,
+                    source_timestamp: result.source_timestamp,
+                    analysis_duration: result.analysis_duration,
+                    trigger_sensors: result.trigger_sensors,
+                    reasoning: result.reasoning,
+                    summary: result.summary,
                 },
             }));
             await markAdminNotified(redisClient, venueId, zone, crisisType);
@@ -122,7 +125,7 @@ async function handleAiResult(result: any, redisClient: any) {
         return;
     }
 
-    console.log(`[NEW CRISIS] ${crisisType}@${zone} | confidence=${confidence}`);
+    console.log(`[NEW CRISIS] ${crisisType}@${zone} | confidence=${confidence} | took ${result.analysis_duration}s`);
     const session = await createSession(redisClient, venueId, zone, crisisType, confidence, mongoResponseId);
 
     if (confidence >= 0.70) {
@@ -142,6 +145,11 @@ async function handleAiResult(result: any, redisClient: any) {
                 zones: [zone],
                 crisis_type: crisisType,
                 crisis_session_id: session.crisis_session_id,
+                source_timestamp: result.source_timestamp,
+                analysis_duration: result.analysis_duration,
+                trigger_sensors: result.trigger_sensors,
+                reasoning: result.reasoning,
+                summary: result.summary,
             },
         }));
         await markAdminNotified(redisClient, venueId, zone, crisisType);

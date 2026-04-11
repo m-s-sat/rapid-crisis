@@ -5,7 +5,7 @@ interface AuthState {
   admin: { name: string; email: string } | null;
   venue_id: string | null;
   accessToken: string | null;
-  isLoading: boolean;
+  isInitialized: boolean;
 }
 
 // Helper to safely access storage in Next.js
@@ -27,7 +27,7 @@ const initialState: AuthState = {
   admin: stored?.admin || null,
   venue_id: stored?.venue_id || null,
   accessToken: null, // Keep in memory only
-  isLoading: true,
+  isInitialized: false,
 };
 
 const authSlice = createSlice({
@@ -42,20 +42,20 @@ const authSlice = createSlice({
       state.admin = admin;
       state.venue_id = venue_id;
       state.accessToken = accessToken;
-      state.isLoading = false;
+      state.isInitialized = true;
       
       if (typeof window !== "undefined") {
         localStorage.setItem("sentinel_user", JSON.stringify({ admin, venue_id }));
       }
     },
-    setLoading: (state, action: PayloadAction<boolean>) => {
-      state.isLoading = action.payload;
+    setInitialized: (state, action: PayloadAction<boolean>) => {
+      state.isInitialized = action.payload;
     },
     logout: (state) => {
       state.admin = null;
       state.venue_id = null;
       state.accessToken = null;
-      state.isLoading = false;
+      state.isInitialized = true;
       
       if (typeof window !== "undefined") {
         localStorage.removeItem("sentinel_user");
@@ -64,5 +64,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { setCredentials, setLoading, logout } = authSlice.actions;
+export const { setCredentials, setInitialized, logout } = authSlice.actions;
 export default authSlice;

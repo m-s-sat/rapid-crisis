@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 
 export default function StaffDirectory() {
   const [page, setPage] = useState(1);
@@ -135,14 +136,23 @@ export default function StaffDirectory() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data?.staff?.length === 0 && (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={4} className="py-20 text-center">
+                  <div className="flex flex-col items-center justify-center gap-2">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Mobilizing Staff Directory...</p>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : data?.staff?.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={4} className="text-center text-muted-foreground py-8 italic">
                   No staff members registered. Click "Register Staff" to add one.
                 </TableCell>
               </TableRow>
-            )}
-            {data?.staff?.map((staff: any) => (
+            ) : null}
+            {!isLoading && data?.staff?.map((staff: any) => (
               <TableRow key={staff._id} className="border-border/20 hover:bg-muted/30 transition-colors">
                 <TableCell className="font-medium">{staff.name}</TableCell>
                 <TableCell className="text-muted-foreground">{staff.phoneNumber}</TableCell>
