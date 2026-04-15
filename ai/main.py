@@ -141,11 +141,14 @@ async def classify_with_ai(evidence: CrisisEvidencePayload):
             
             # OVERRIDE: If hard check was triggered, ensure crisis_detected is True
             if hard_check_triggered:
+                print(f"[AI-BYPASS] Deterministic safety trigger pulled: {hard_reason}")
                 data["crisis_detected"] = True
                 data["confidence_score"] = max(data.get("confidence_score", 0.0), 0.95)
                 if not data.get("reasoning"): data["reasoning"] = hard_reason
-
-            return CrisisClassification(**data).model_dump()
+            
+            result = CrisisClassification(**data).model_dump()
+            result["is_hardware_trigger"] = hard_check_triggered
+            return result
             
         except Exception as e:
             if "429" in str(e):
@@ -160,7 +163,8 @@ async def classify_with_ai(evidence: CrisisEvidencePayload):
                     "crisis_type": "fire" if temp > 45 else "other",
                     "confidence_score": 0.99,
                     "summary": "Emergency levels detected by hardware sensors.",
-                    "reasoning": hard_reason
+                    "reasoning": hard_reason,
+                    "is_hardware_trigger": True
                 }
                 
             print(f"[AI ERROR] Classification/Parsing failed: {e}")
@@ -252,6 +256,7 @@ async def process_evidence(raw_json, redis_client, mongo_db):
                 "analysis_duration": duration, "crisis_detected": True, "crisis_type": crisis_type,
                 "confidence_score": classification.get("confidence_score", 0.0),
                 "summary": classification.get("summary", ""), "reasoning": classification.get("reasoning", ""),
+                "is_hardware_trigger": classification.get("is_hardware_trigger", False),
                 "trigger_sensors": sensors, "venue_details": format_doc(venue),
                 "crisis_details": format_doc(crisis), "status": "active"
             }

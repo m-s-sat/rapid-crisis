@@ -27,10 +27,15 @@ flowchart TD
 
     subgraph AI["🤖 AI Service (Python)"]
         BRPOP_AI["BRPOP\nai_evidence_queue"]
-        CLASSIFY["Classify Crisis\n(threshold stub → Gemini)"]
+        HARD_CHECK{"Safety Hard-Check\n(Temp > 45 | Smoke > 350)"}
+        CLASSIFY["Classify Crisis\n(Nemotron-3)"]
         MONGO_WRITE["Create AiResponse\nMongoDB: ai_responses"]
         ENRICH["Enrich with\nvenue + crisis details"]
         LPUSH_RESULT["LPUSH\nai_result_queue"]
+
+        BRPOP_AI --> HARD_CHECK
+        HARD_CHECK -->|"Bypass AI"| MONGO_WRITE
+        HARD_CHECK -->|"Normal Levels"| CLASSIFY
     end
 
     subgraph WORKER["⚙️ Worker Server"]
@@ -249,3 +254,13 @@ This ensures that the "Operational Picture" is consistent for all users, regardl
 |-----|------------|-----|---------|
 | `active_crisis_cache:{id}` | JSON String | 15m | Preserves "Activate Protocol" state for dashboards |
 | `last_telemetry:{id}` | JSON String | 1h | Preserves the sensor snapshot that triggered a pause |
+
+---
+
+### Sensor Key Mapping (Verified)
+
+| App Key | Hardware Key | Unit | Safety Threshold |
+|---------|--------------|------|------------------|
+| `temp` | `temperature_c` | Celsius | > 45°C |
+| `smoke` | `smoke_ppm` | ppm | > 350ppm |
+| `vib` | `vibration_g` | g | > 0.4g |

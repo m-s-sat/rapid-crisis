@@ -85,8 +85,16 @@ async function handleAiResult(result: any, redisClient: any) {
     const existing = await getActiveSession(redisClient, venueId, zone, crisisType);
 
     if (existing) {
+        const oldPeak = existing.peak_confidence || 0;
         const updated = await updateSession(redisClient, venueId, zone, crisisType, confidence);
         if (!updated) return;
+
+        if (confidence > oldPeak) {
+            console.log(
+                `[ESCALATION-AUDIT] ${crisisType}@${zone} confidence increased: ` +
+                `${oldPeak.toFixed(2)} -> ${confidence.toFixed(2)}`
+            );
+        }
 
         console.log(
             `[DEDUP] ${crisisType}@${zone} | reading #${updated.reading_count} | ` +
