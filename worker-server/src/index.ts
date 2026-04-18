@@ -41,11 +41,16 @@ async function sendAlerts(venue: any, crisis: any, zone: string, redisClient: an
     }
 
     if (venue.staff_details) {
-        const staffList = Object.values(venue.staff_details);
-        for (const staff of staffList) {
+        const staffEntries = Array.isArray(venue.staff_details)
+            ? venue.staff_details.map((staff: any, index: number) => [String(index), staff] as const)
+            : Object.entries(venue.staff_details);
+
+        for (const [staffKey, staff] of staffEntries) {
             const s = staff as any;
-            if (s.phoneNumber && (s.expertise === "all" || s.expertise === crisis.type)) {
-                const role = s.expertise === "all" ? "admin" : "staff";
+            const expertise = s.expertise || staffKey;
+
+            if (s.phoneNumber && (expertise === "all" || expertise === crisis.type)) {
+                const role = expertise === "all" ? "admin" : "staff";
                 const body = generateBody(venue.name, zone, crisis.type, role, crisis.safety_measures, crisis.description);
                 await sendSms(s.phoneNumber, body);
             }
@@ -115,6 +120,8 @@ async function handleAiResult(result: any, redisClient: any) {
                 payload: {
                     venue_details: venueDetails,
                     crisis_details: crisisDetails,
+                    venue_id: venueId,
+                    zone,
                     confidence_score: updated.peak_confidence,
                     status: "active",
                     zones: [zone],
@@ -148,6 +155,8 @@ async function handleAiResult(result: any, redisClient: any) {
             payload: {
                 venue_details: venueDetails,
                 crisis_details: crisisDetails,
+                venue_id: venueId,
+                zone,
                 confidence_score: confidence,
                 status: "active",
                 zones: [zone],

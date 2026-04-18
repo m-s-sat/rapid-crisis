@@ -6,17 +6,17 @@ import { useSelector } from "react-redux";
 
 export default function IndexPage() {
   const router = useRouter();
-  const { accessToken, isLoading } = useSelector((state: any) => state.auth);
+  const { accessToken, isInitialized } = useSelector((state: any) => state.auth);
 
   useEffect(() => {
-    if (isLoading) return; // Wait for AuthInit to complete
+    if (!isInitialized) return;
 
     if (accessToken) {
       router.push("/dashboard");
     } else {
       router.push("/login");
     }
-  }, [accessToken, isLoading, router]);
+  }, [accessToken, isInitialized, router]);
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0b1326' }}>

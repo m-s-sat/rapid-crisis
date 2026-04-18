@@ -39,12 +39,14 @@ class CrisisClassification(BaseModel):
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/google-solutions")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "nvidia/nemotron-3-super-120b-a12b:free")
 INPUT_QUEUE = "ai_evidence_queue"
 OUTPUT_QUEUE = "ai_result_queue"
 
 # Initialize LLM with OpenRouter configuration
 llm = None
+raw_llm = None
 if OPENROUTER_API_KEY:
     try:
         raw_llm = ChatOpenAI(
@@ -59,7 +61,10 @@ if OPENROUTER_API_KEY:
     except Exception as e:
         print(f"[AI ERROR] Failed to initialize OpenRouter LLM: {e}")
 else:
-    print("[AI WARNING] OPENROUTER_API_KEY not found. AI classification will fail.")
+    if GOOGLE_API_KEY:
+        print("[AI WARNING] GOOGLE_API_KEY is set, but this worker currently uses OpenRouter-compatible models. Falling back to deterministic sensor classification.")
+    else:
+        print("[AI WARNING] No LLM API key found. Falling back to deterministic sensor classification.")
 
 # Converts media data to a LangChain HumanMessage
 def media_to_message(media_data: str, media_type: str = "image", mime_type: Optional[str] = None) -> HumanMessage:
@@ -81,10 +86,123 @@ def media_to_message(media_data: str, media_type: str = "image", mime_type: Opti
         "data": pure_b64
     }])
 
+
+def deterministic_classification(evidence: CrisisEvidencePayload):
+    zone = evidence.location.get("zone", "unknown") if evidence.location else "unknown"
+    sensors = evidence.sensors or {}
+
+    temp = float(sensors.get("temperature_c", 0) or 0)
+    smoke = float(sensors.get("smoke_ppm", 0) or 0)
+    vib = float(sensors.get("vibration_g", 0) or 0)
+    gas_lpg = float(sensors.get("gas_lpg_ppm", 0) or 0)
+    gas_methane = float(sensors.get("gas_methane_ppm", 0) or 0)
+    co = float(sensors.get("co_ppm", 0) or 0)
+    co2 = float(sensors.get("co2_ppm", 0) or 0)
+    air_quality = float(sensors.get("air_quality_index", 0) or 0)
+    water_level = float(sensors.get("water_level_cm", 0) or 0)
+    sound = float(sensors.get("sound_db", 0) or 0)
+    flame_detected = bool(sensors.get("flame_detected", False))
+    moisture_detected = bool(sensors.get("moisture_detected", False))
+    motion_detected = bool(sensors.get("motion_detected", False))
+    door_open = bool(sensors.get("door_open", False))
+
+    if temp > 45 or smoke > 350 or flame_detected:
+        reasons = []
+        if temp > 45:
+            reasons.append(f"temperature_c={temp}C")
+        if smoke > 350:
+            reasons.append(f"smoke_ppm={smoke}")
+        if flame_detected:
+            reasons.append("flame_detected=true")
+        return {
+            "crisis_detected": True,
+            "crisis_type": "fire",
+            "confidence_score": 0.99 if flame_detected or temp > 70 or smoke > 700 else 0.93,
+            "summary": f"Fire indicators detected in {zone}.",
+            "reasoning": "Deterministic fire trigger: " + ", ".join(reasons),
+            "is_hardware_trigger": True,
+        }
+
+    if gas_lpg > 120 or gas_methane > 120 or co > 80:
+        reasons = []
+        if gas_lpg > 120:
+            reasons.append(f"gas_lpg_ppm={gas_lpg}")
+        if gas_methane > 120:
+            reasons.append(f"gas_methane_ppm={gas_methane}")
+        if co > 80:
+            reasons.append(f"co_ppm={co}")
+        return {
+            "crisis_detected": True,
+            "crisis_type": "gas_leak",
+            "confidence_score": 0.91,
+            "summary": f"Gas leak indicators detected in {zone}.",
+            "reasoning": "Deterministic gas trigger: " + ", ".join(reasons),
+            "is_hardware_trigger": True,
+        }
+
+    if vib > 0.4:
+        return {
+            "crisis_detected": True,
+            "crisis_type": "earthquake",
+            "confidence_score": 0.96,
+            "summary": f"Seismic activity detected in {zone}.",
+            "reasoning": f"Deterministic earthquake trigger: vibration_g={vib}",
+            "is_hardware_trigger": True,
+        }
+
+    if water_level > 5 or moisture_detected:
+        reasons = []
+        if water_level > 5:
+            reasons.append(f"water_level_cm={water_level}")
+        if moisture_detected:
+            reasons.append("moisture_detected=true")
+        return {
+            "crisis_detected": True,
+            "crisis_type": "water_leak",
+            "confidence_score": 0.86,
+            "summary": f"Water leak indicators detected in {zone}.",
+            "reasoning": "Deterministic water-leak trigger: " + ", ".join(reasons),
+            "is_hardware_trigger": True,
+        }
+
+    if air_quality > 180 or co2 > 1500:
+        reasons = []
+        if air_quality > 180:
+            reasons.append(f"air_quality_index={air_quality}")
+        if co2 > 1500:
+            reasons.append(f"co2_ppm={co2}")
+        return {
+            "crisis_detected": True,
+            "crisis_type": "air_quality",
+            "confidence_score": 0.74,
+            "summary": f"Air quality degradation detected in {zone}.",
+            "reasoning": "Deterministic air-quality trigger: " + ", ".join(reasons),
+            "is_hardware_trigger": False,
+        }
+
+    if motion_detected and door_open and sound > 75:
+        return {
+            "crisis_detected": True,
+            "crisis_type": "security",
+            "confidence_score": 0.71,
+            "summary": f"Security breach indicators detected in {zone}.",
+            "reasoning": f"Deterministic security trigger: motion_detected=true, door_open=true, sound_db={sound}",
+            "is_hardware_trigger": False,
+        }
+
+    return {
+        "crisis_detected": False,
+        "crisis_type": "other",
+        "confidence_score": 0.0,
+        "summary": f"No crisis indicators detected in {zone}.",
+        "reasoning": "No deterministic crisis thresholds exceeded.",
+        "is_hardware_trigger": False,
+    }
+
 # Performs AI classification using the configured LLM (Sensor-Priority Logic)
 async def classify_with_ai(evidence: CrisisEvidencePayload):
-    if not llm:
-        return {"crisis_detected": False, "error": "LLM client not initialized"}
+    if not llm or not raw_llm:
+        return deterministic_classification(evidence)
 
     zone = evidence.location.get("zone", "unknown") if evidence.location else "unknown"
     sensors = evidence.sensors or {}
@@ -168,9 +286,13 @@ async def classify_with_ai(evidence: CrisisEvidencePayload):
                 }
                 
             print(f"[AI ERROR] Classification/Parsing failed: {e}")
-            return {"crisis_detected": False, "error": str(e)}
+            fallback = deterministic_classification(evidence)
+            fallback["reasoning"] = f"{fallback['reasoning']} Fallback activated after AI error: {e}"
+            return fallback
     
-    return {"crisis_detected": False, "error": "Max retries exceeded"}
+    fallback = deterministic_classification(evidence)
+    fallback["reasoning"] = f"{fallback['reasoning']} Fallback activated after AI retries were exhausted."
+    return fallback
 
 # Serializes MongoDB BSON types to JSON
 def json_serializer(obj):
@@ -187,7 +309,46 @@ async def get_venue_and_crisis_details(mongo_db, venue_id, crisis_type):
     try:
         crisis = await mongo_db.crisis_types.find_one({"type": crisis_type})
     except: pass
-    return venue, crisis
+    enriched_venue = dict(venue) if venue else None
+
+    if venue_id:
+        try:
+            venue_object_id = ObjectId(venue_id)
+
+            guests = []
+            try:
+                guests = await mongo_db.guests.find({
+                    "venue_id": venue_object_id,
+                    "status": "active"
+                }).to_list(length=500)
+            except:
+                guests = []
+
+            staff = []
+            for collection_name in ("staffs", "staff"):
+                try:
+                    collection = getattr(mongo_db, collection_name)
+                    staff = await collection.find({"venue_id": venue_object_id}).to_list(length=500)
+                    if staff:
+                        break
+                except:
+                    continue
+
+            if not enriched_venue:
+                enriched_venue = {"_id": venue_id}
+
+            if guests and not enriched_venue.get("guest_details"):
+                enriched_venue["guest_details"] = guests
+
+            if staff and not enriched_venue.get("staff_details"):
+                enriched_venue["staff_details"] = {
+                    f"{entry.get('expertise', 'staff')}_{index}": entry
+                    for index, entry in enumerate(staff, start=1)
+                }
+        except:
+            pass
+
+    return enriched_venue, crisis
 
 # Formats MongoDB documents for clean serialization
 def format_doc(doc):
@@ -239,7 +400,7 @@ async def process_evidence(raw_json, redis_client, mongo_db):
             venue, crisis = await get_venue_and_crisis_details(mongo_db, evidence.venue_id, crisis_type)
             if not crisis: _, crisis = await get_venue_and_crisis_details(mongo_db, evidence.venue_id, "other")
 
-            await mongo_db.ai_responses.insert_one({
+            mongo_insert = await mongo_db.ai_responses.insert_one({
                 "venue": ObjectId(evidence.venue_id) if evidence.venue_id else None,
                 "crisis": crisis["_id"] if crisis else None,
                 "confidence_score": classification.get("confidence_score", 0.0),
@@ -257,6 +418,7 @@ async def process_evidence(raw_json, redis_client, mongo_db):
                 "confidence_score": classification.get("confidence_score", 0.0),
                 "summary": classification.get("summary", ""), "reasoning": classification.get("reasoning", ""),
                 "is_hardware_trigger": classification.get("is_hardware_trigger", False),
+                "mongo_response_id": str(mongo_insert.inserted_id),
                 "trigger_sensors": sensors, "venue_details": format_doc(venue),
                 "crisis_details": format_doc(crisis), "status": "active"
             }

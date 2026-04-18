@@ -17,16 +17,27 @@ export const Header = () => {
 
   if (!auth.accessToken) return null;
 
-  const handleLogout = () => {
-    dispatch(logout());
-    toast.info("Signed out — session terminated");
-    router.push("/login");
+  const handleLogout = async () => {
+    try {
+      await fetch("/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        headers: auth.accessToken
+          ? { Authorization: `Bearer ${auth.accessToken}` }
+          : undefined,
+      });
+    } catch (err) {
+      console.error("Logout request failed:", err);
+    } finally {
+      dispatch(logout());
+      toast.info("Signed out - session terminated");
+      router.push("/login");
+    }
   };
 
   return (
     <header className="sticky top-0 z-30 flex h-[70px] items-center justify-between border-b border-border/50 bg-background/85 px-4 lg:px-6 backdrop-blur-xl shadow-sm">
       <div className="flex items-center gap-4">
-        {/* Mobile Navigation Trigger */}
         <MobileNav auth={auth} handleLogout={handleLogout} pathname={pathname} />
 
         <div className="hidden lg:flex items-center gap-2">
@@ -57,7 +68,7 @@ export const Header = () => {
         </div>
 
         <Button variant="outline" size="icon" className="relative rounded-full border-border/50 bg-card hover:bg-accent hover:text-accent-foreground transition-all ml-2">
-          <span className="text-lg">🔔</span>
+          <span className="text-lg">!</span>
           <Badge
             variant="destructive"
             className="absolute -right-1 -top-1 flex h-[18px] w-[18px] items-center justify-center rounded-full p-0 text-[0.55rem] font-bold shadow-lg animate-bounce"

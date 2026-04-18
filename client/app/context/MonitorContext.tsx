@@ -41,6 +41,7 @@ export const MonitorProvider = ({ children }: { children: ReactNode }) => {
 
   const auth = useSelector((state: any) => state.auth);
   const venueId = auth?.venue_id;
+  const accessToken = auth?.accessToken;
 
   const wsAlertsRef = useRef<WebSocket | null>(null);
   const wsSensorRef = useRef<WebSocket | null>(null);
@@ -80,6 +81,13 @@ export const MonitorProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const handleAdminDecision = useCallback(async (action: "approve" | "cancel", payload: any) => {
+    if (!accessToken) {
+      toast.error("Your session expired", {
+        description: "Please sign in again before submitting an incident decision.",
+      });
+      return;
+    }
+
     const loadingId = toast.loading(
       action === "approve"
         ? "Dispatching crisis alerts to all contacts..."
@@ -87,9 +95,13 @@ export const MonitorProvider = ({ children }: { children: ReactNode }) => {
     );
 
     try {
-      const res = await fetch(`http://127.0.0.1:3002/api/admin/decision`, {
+      const res = await fetch("/api/admin/decision", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({ action, payload }),
       });
 
@@ -125,7 +137,7 @@ export const MonitorProvider = ({ children }: { children: ReactNode }) => {
       });
       console.error("Error submitting decision:", err);
     }
-  }, [addMessage]);
+  }, [accessToken, addMessage]);
 
   useEffect(() => {
     if (!venueId) return;

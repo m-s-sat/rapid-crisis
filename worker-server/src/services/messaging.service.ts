@@ -3,11 +3,13 @@ export function generateBody(
     zone: string,
     crisisType: string,
     role: "staff" | "guest" | "admin",
-    safetyMeasures?: string,
+    safetyMeasures?: string | string[],
     description?: string
 ): string {
     const typeUpper = crisisType.toUpperCase();
-    const measures = safetyMeasures || "Follow the instructions of the venue staff.";
+    const measures = Array.isArray(safetyMeasures)
+        ? safetyMeasures.join(" ")
+        : (safetyMeasures || "Follow the instructions of the venue staff.");
     const info = description ? ` (${description})` : "";
 
     if (role === "admin") {

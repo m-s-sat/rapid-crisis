@@ -154,7 +154,10 @@ async function startServer() {
                         if (redis && targetVenueId) redis.del(`active_crisis_cache:${targetVenueId}`);
                     });
                     wss.clients.forEach((client: any) => {
-                        if (client.readyState === WebSocket.OPEN) {
+                        if (
+                            client.readyState === WebSocket.OPEN &&
+                            (!targetVenueId || client.venue_id === targetVenueId)
+                        ) {
                             client.send(JSON.stringify({ type: 'pause_ended' }));
                         }
                     });

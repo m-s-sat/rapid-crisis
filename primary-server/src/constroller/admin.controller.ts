@@ -10,6 +10,17 @@ export async function adminDecision(req: Request, res: Response): Promise<any> {
             return res.status(400).json({ success: false, message: "Invalid payload provided" });
         }
 
+        const requesterVenueId = String((req as any).venueId || "");
+        const targetVenueId = String(
+            payload.venue_id ||
+            payload.venue_details?._id ||
+            ""
+        );
+
+        if (requesterVenueId && targetVenueId && requesterVenueId !== targetVenueId) {
+            return res.status(403).json({ success: false, message: "You cannot manage alerts for another venue" });
+        }
+
         const crisisId = payload.crisis_details._id || payload.crisis_details;
 
         const existingTimeout = activeTimeouts.get(crisisId);
@@ -29,7 +40,10 @@ export async function adminDecision(req: Request, res: Response): Promise<any> {
         } else if (action === 'cancel') {
             const redisClient = await redisManagerInstance.getClient();
             if (redisClient) {
-                await redisClient.publish("messaging_status", JSON.stringify({ type: "resume" }));
+                await redisClient.publish("messaging_status", JSON.stringify({
+                    type: "resume",
+                    venue_id: targetVenueId || undefined
+                }));
             }
             return res.json({ success: true, message: "Admin safely cancelled the alert." });
         } else {

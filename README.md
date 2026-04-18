@@ -10,13 +10,15 @@ The entire ecosystem is containerized for instant local execution and cloud depl
 
 ### 1. Prerequisites
 - **Docker** & **Docker Compose**
-- **Google Gemini API Key** (for AI classification)
+- **OpenRouter API Key** (recommended for AI classification)
 
 ### 2. Configure Environment
 Create a `.env` file in the root directory (or ensure your environment has these set):
 ```bash
-GOOGLE_API_KEY=your_gemini_api_key_here
+OPENROUTER_API_KEY=your_openrouter_api_key_here
 ```
+
+If no LLM key is provided, the AI worker now falls back to deterministic sensor-based classification so critical incidents are still processed.
 
 ### 3. Launch the Ecosystem
 ```bash

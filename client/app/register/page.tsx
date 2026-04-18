@@ -26,18 +26,18 @@ export default function Register() {
     password: "",
   });
 
-  const { accessToken, isLoading: authLoading } = useSelector((state: any) => state.auth);
+  const { accessToken, isInitialized } = useSelector((state: any) => state.auth);
   const [register, { isLoading, error }] = useRegisterMutation();
   const dispatch = useDispatch();
   const router = useRouter();
 
   useEffect(() => {
-    if (!authLoading && accessToken) {
+    if (isInitialized && accessToken) {
       router.push("/dashboard");
     }
-  }, [accessToken, authLoading, router]);
+  }, [accessToken, isInitialized, router]);
 
-  if (authLoading || accessToken) {
+  if (!isInitialized || accessToken) {
     return (
       <div className="flex h-[calc(100vh-100px)] items-center justify-center">
         <div className="text-primary italic animate-pulse tracking-widest font-bold">

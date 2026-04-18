@@ -23,7 +23,7 @@ export const verifyToken = async (req: Request, res: Response, next: NextFunctio
             return res.status(401).json({ message: "Token has been revoked" });
         }
 
-        (req as any).adminId = decoded.id;
+        (req as any).adminId = decoded.sub;
         (req as any).venueId = decoded.venueId;
         (req as any).jti = decoded.jti; // Store for logout
         

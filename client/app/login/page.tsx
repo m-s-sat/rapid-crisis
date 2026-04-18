@@ -21,7 +21,7 @@ export default function Login() {
   const router = useRouter();
   
   const accessToken = useSelector((state: any) => state.auth.accessToken);
-  const authLoading = useSelector((state: any) => state.auth.isLoading);
+  const authInitializing = useSelector((state: any) => !state.auth.isInitialized);
 
   useEffect(() => {
     if (accessToken) {
@@ -45,7 +45,7 @@ export default function Login() {
     }
   };
 
-  if (authLoading || accessToken) {
+  if (authInitializing || accessToken) {
     return (
       <div className="flex min-h-[calc(100vh-150px)] items-center justify-center p-8">
         <div className="text-primary italic animate-pulse">Verifying authorization...</div>

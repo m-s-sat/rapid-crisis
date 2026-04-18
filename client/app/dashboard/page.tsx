@@ -13,12 +13,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     setMounted(true);
-    if (!auth.isLoading && !auth.accessToken) {
+    if (auth.isInitialized && !auth.accessToken) {
       router.push("/login");
     }
-  }, [auth.accessToken, auth.isLoading, router]);
+  }, [auth.accessToken, auth.isInitialized, router]);
 
-  if (!mounted || auth.isLoading) {
+  if (!mounted || !auth.isInitialized) {
     return (
       <div className="flex h-[calc(100vh-100px)] items-center justify-center">
         <div className="text-primary italic animate-pulse tracking-widest font-bold">
