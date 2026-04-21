@@ -3,7 +3,6 @@ import { logger } from "../utils/logger.js";
 import { wss } from "../index.js";
 import { captureAllMedia } from "./media.service.js";
 import type { CrisisEvidencePayload, SensorReading } from "../types/sensor.types.js";
-
 import { redisManagerInstance } from "../db/redis.js";
 
 const AI_PROCESS_URL = `${env.PRIMARY_SERVER_URL}/api/ai/process`;
@@ -31,7 +30,6 @@ export async function transmitReading(reading: SensorReading): Promise<void> {
         media,
     };
 
-    // Cache the telemetry in Redis for reconnecting clients
     redisManagerInstance.getClient().then(redis => {
         if (redis) {
             redis.set(`last_telemetry:${payload.venue_id}`, JSON.stringify(payload), { EX: 3600 });
@@ -39,10 +37,9 @@ export async function transmitReading(reading: SensorReading): Promise<void> {
         }
     });
 
-    // Broadcast directly to local connected frontend clients via WS!
     const wsPayload = JSON.stringify({ type: 'sensor_data', payload });
     wss.clients.forEach((client) => {
-        if (client.readyState === 1) { // OPEN
+        if (client.readyState === 1) {
             client.send(wsPayload);
         }
     });
@@ -57,16 +54,15 @@ export async function transmitReading(reading: SensorReading): Promise<void> {
         const data = await res.json() as Record<string, unknown>;
 
         if (res.ok && data.success) {
-            // Logs immediate trend detection result from primary server
             logger.success(
-                `${reading.device_id} → primary-server | trend_detected=${data.crisis_detected} (Full GenAI Pending)`
+                `${reading.device_id} → primary-server | trend_detected=${data.crisis_detected}`
             );
         } else {
             logger.warn(
-                `${reading.device_id} → primary-server responded: ${JSON.stringify(data)}`
+                `${reading.device_id} → primary-server error: ${JSON.stringify(data)}`
             );
         }
     } catch (err: any) {
-        logger.error(`${reading.device_id} → failed to reach primary-server: ${err.message}`);
+        logger.error(`${reading.device_id} → target unreachable: ${err.message}`);
     }
 }

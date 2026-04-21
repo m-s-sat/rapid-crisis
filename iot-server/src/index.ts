@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { WebSocketServer } from "ws";
 import { env } from "./config/env.js";
 import { initDevices } from "./services/sensor.service.js";
@@ -13,10 +14,11 @@ import { getLastSensorPayload } from "./services/transmitter.service.js";
 
 const app = express();
 
+app.use(cors());
 app.use(express.json());
 
 app.use("/api", deviceRoutes);
-app.use("/api", simulatorRoutes);
+app.use("/api/simulator", simulatorRoutes);
 
 export const wss = new WebSocketServer({ noServer: true });
 
@@ -26,16 +28,14 @@ wss.on("connection", async (ws, req) => {
         const urlParams = new URL(req.url || '', `http://${req.headers.host}`);
         venue_id = urlParams.searchParams.get('venue_id') || undefined;
     } catch (e) {
-        logger.error("Error parsing WS URL for venue_id");
+        logger.error("WS parse error");
     }
 
-    // 1. Instantly provide the last known sensor snapshot from Redis
     const lastPayload = await getLastSensorPayload(venue_id);
     if (lastPayload) {
         ws.send(JSON.stringify({ type: "sensor_data", payload: lastPayload }));
     }
 
-    // 2. Inform the client if we are currently parked (paused) in an incident
     if (getPauseState()) {
         const remaining = getPauseRemainingMs();
         if (remaining > 0) {
@@ -48,7 +48,7 @@ async function boot() {
     await mongoManager.init();
 
     const devices = await initDevices();
-    logger.info(`Initialized ${devices.length} simulated ESP32 devices`);
+    logger.info(`Initialized ${devices.length} devices`);
     
     await startRedisListener();
 
@@ -56,16 +56,7 @@ async function boot() {
     setRunning(true);
 
     const server = app.listen(env.PORT, () => {
-        logger.success(`IoT simulator running on http://localhost:${env.PORT}`);
-        logger.info("────────────────────────────────────────");
-        logger.info("Endpoints:");
-        logger.info("  GET  /api/status                  — health check");
-        logger.info("  GET  /api/devices                 — list devices");
-        logger.info("  GET  /api/devices/:id/reading     — single reading");
-        logger.info("  GET  /api/readings                — all readings");
-        logger.info("  POST /api/simulator/start          — start emission");
-        logger.info("  POST /api/simulator/stop           — stop emission");
-        logger.info("────────────────────────────────────────");
+        logger.success(`IoT simulator running on port ${env.PORT}`);
     });
 
     server.on('upgrade', (request, socket, head) => {
@@ -76,4 +67,3 @@ async function boot() {
 }
 
 boot();
-

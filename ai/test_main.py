@@ -129,12 +129,12 @@ async def test_get_venue_and_crisis_details():
     mock_db.venues.find_one.assert_called_once()
     mock_db.crisis_types.find_one.assert_called_once()
 
-# --- 5. AI Classification Tests (Mocking ChatOpenAI/OpenRouter) ---
+# --- 5. AI Classification Tests (Mocking ChatGoogleGenerativeAI) ---
 
 @pytest.mark.asyncio
 @patch("main.llm", create=True) # Patching the structured LLM instance
 async def test_classify_with_ai(mock_llm):
-    # Setup mock LLM response (simulating the Pydantic structured output from OpenRouter)
+    # Setup mock LLM response (simulating the Pydantic structured output from Gemini)
     mock_response = CrisisClassification(
         crisis_detected=True,
         crisis_type="fire",
@@ -142,7 +142,7 @@ async def test_classify_with_ai(mock_llm):
         summary="Smoke and fire detected in the Lobby.",
         reasoning="Sensors indicate extreme heat and smoke; visual confirmation via media."
     )
-    # The ChatOpenAI wrapper's ainvoke method returns our structured pydantic model
+    # The ChatGoogleGenerativeAI wrapper's ainvoke method returns our structured pydantic model
     mock_llm.ainvoke = AsyncMock(return_value=mock_response)
     
     # Python objects (like MagicMock) evaluate to True, so this will pass the 'if not llm:' check
@@ -162,8 +162,8 @@ async def test_classify_with_ai(mock_llm):
     args, kwargs = mock_llm.ainvoke.call_args
     messages = args[0]
     
-    # 2 default messages (System, Human telemetry) + 3 media messages
-    assert len(messages) == 5
+    # 1 message (Instructions + Telemetry)
+    assert len(messages) == 1
 
 # --- 6. Main Integration Loop Test ---
 

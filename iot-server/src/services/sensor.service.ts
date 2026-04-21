@@ -13,6 +13,12 @@ const ZONES = ["lobby", "kitchen", "hallway", "server_room", "parking_garage", "
 const FLOORS = [0, 1, 2, 3, 4, 5];
 const FIRMWARE_VERSIONS = ["3.2.1", "3.2.0", "3.1.8", "3.0.5"];
 
+const deviceStates = new Map<string, SensorSnapshot>();
+const deviceUptimes = new Map<string, number>();
+let devices: DeviceConfig[] = [];
+let venueId: string = "";
+let DUMMY_PHOTO = "";
+
 function generateMac(): string {
     return "ESP:" + Array.from({ length: 5 }, () =>
         Math.floor(Math.random() * 256).toString(16).padStart(2, "0").toUpperCase()
@@ -30,195 +36,51 @@ function createDevices(count: number): DeviceConfig[] {
     }));
 }
 
-function jitter(base: number, range: number): number {
-    return +(base + (Math.random() - 0.5) * 2 * range).toFixed(2);
+function drift(current: number, min: number, max: number, noise: number): number {
+    const change = (Math.random() - 0.5) * noise;
+    let next = current + change;
+    if (next < min) next = min + Math.random() * noise;
+    if (next > max) next = max - Math.random() * noise;
+    return +next.toFixed(2);
 }
 
-function ambientSensors(): SensorSnapshot {
+function getInitialAmbient(): SensorSnapshot {
     return {
-        temperature_c: jitter(24, 3),
-        humidity_pct: jitter(45, 10),
-        smoke_ppm: jitter(5, 3),
-        co_ppm: jitter(2, 1),
-        co2_ppm: jitter(450, 50),
-        gas_lpg_ppm: jitter(10, 5),
-        gas_methane_ppm: jitter(3, 2),
-        air_quality_index: jitter(30, 10),
+        temperature_c: 24,
+        humidity_pct: 45,
+        smoke_ppm: 5,
+        co_ppm: 2,
+        co2_ppm: 450,
+        gas_lpg_ppm: 10,
+        gas_methane_ppm: 3,
+        air_quality_index: 30,
         flame_detected: false,
-        motion_detected: Math.random() > 0.6,
-        sound_db: jitter(40, 8),
-        vibration_g: jitter(0.02, 0.01),
+        motion_detected: false,
+        sound_db: 40,
+        vibration_g: 0.02,
         water_level_cm: 0,
         moisture_detected: false,
-        door_open: Math.random() > 0.8,
+        door_open: false,
     };
 }
 
-function fireSensors(): SensorSnapshot {
-    return {
-        temperature_c: jitter(85, 30),
-        humidity_pct: jitter(15, 5),
-        smoke_ppm: jitter(900, 200),
-        co_ppm: jitter(150, 50),
-        co2_ppm: jitter(2000, 500),
-        gas_lpg_ppm: jitter(60, 20),
-        gas_methane_ppm: jitter(10, 5),
-        air_quality_index: jitter(250, 50),
-        flame_detected: Math.random() > 0.15,
-        motion_detected: Math.random() > 0.3,
-        sound_db: jitter(85, 10),
-        vibration_g: jitter(0.3, 0.15),
-        water_level_cm: 0,
-        moisture_detected: false,
-        door_open: Math.random() > 0.5,
-    };
-}
-
-function gasLeakSensors(): SensorSnapshot {
-    return {
-        temperature_c: jitter(24, 3),
-        humidity_pct: jitter(45, 10),
-        smoke_ppm: jitter(15, 8),
-        co_ppm: jitter(120, 40),
-        co2_ppm: jitter(1200, 300),
-        gas_lpg_ppm: jitter(350, 100),
-        gas_methane_ppm: jitter(180, 50),
-        air_quality_index: jitter(200, 40),
-        flame_detected: false,
-        motion_detected: Math.random() > 0.5,
-        sound_db: jitter(55, 10),
-        vibration_g: jitter(0.03, 0.01),
-        water_level_cm: 0,
-        moisture_detected: false,
-        door_open: Math.random() > 0.7,
-    };
-}
-
-function earthquakeSensors(): SensorSnapshot {
-    return {
-        temperature_c: jitter(24, 3),
-        humidity_pct: jitter(45, 10),
-        smoke_ppm: jitter(8, 4),
-        co_ppm: jitter(3, 1),
-        co2_ppm: jitter(500, 80),
-        gas_lpg_ppm: jitter(12, 5),
-        gas_methane_ppm: jitter(5, 3),
-        air_quality_index: jitter(40, 15),
-        flame_detected: false,
-        motion_detected: true,
-        sound_db: jitter(75, 15),
-        vibration_g: jitter(0.8, 0.4),
-        water_level_cm: 0,
-        moisture_detected: false,
-        door_open: Math.random() > 0.3,
-    };
-}
-
-function securitySensors(): SensorSnapshot {
-    return {
-        temperature_c: jitter(23, 3),
-        humidity_pct: jitter(48, 8),
-        smoke_ppm: jitter(4, 2),
-        co_ppm: jitter(1, 0.5),
-        co2_ppm: jitter(480, 50),
-        gas_lpg_ppm: jitter(7, 3),
-        gas_methane_ppm: jitter(3, 2),
-        air_quality_index: jitter(35, 10),
-        flame_detected: false,
-        motion_detected: true,
-        sound_db: jitter(88, 12),
-        vibration_g: jitter(0.25, 0.1),
-        water_level_cm: 0,
-        moisture_detected: false,
-        door_open: true,
-    };
-}
-
-function waterLeakSensors(): SensorSnapshot {
-    return {
-        temperature_c: jitter(22, 3),
-        humidity_pct: jitter(92, 5),
-        smoke_ppm: jitter(4, 2),
-        co_ppm: jitter(2, 1),
-        co2_ppm: jitter(460, 50),
-        gas_lpg_ppm: jitter(8, 3),
-        gas_methane_ppm: jitter(3, 2),
-        air_quality_index: jitter(35, 10),
-        flame_detected: false,
-        motion_detected: Math.random() > 0.6,
-        sound_db: jitter(50, 10),
-        vibration_g: jitter(0.03, 0.01),
-        water_level_cm: jitter(8, 4),
-        moisture_detected: true,
-        door_open: Math.random() > 0.7,
-    };
-}
-
-function airQualitySensors(): SensorSnapshot {
-    return {
-        temperature_c: jitter(26, 3),
-        humidity_pct: jitter(55, 10),
-        smoke_ppm: jitter(40, 15),
-        co_ppm: jitter(45, 15),
-        co2_ppm: jitter(1800, 400),
-        gas_lpg_ppm: jitter(30, 10),
-        gas_methane_ppm: jitter(15, 8),
-        air_quality_index: jitter(220, 60),
-        flame_detected: false,
-        motion_detected: Math.random() > 0.5,
-        sound_db: jitter(42, 8),
-        vibration_g: jitter(0.02, 0.01),
-        water_level_cm: 0,
-        moisture_detected: false,
-        door_open: Math.random() > 0.7,
-    };
-}
-
-const SENSOR_GENERATORS: Record<CrisisType, () => SensorSnapshot> = {
-    fire: fireSensors,
-    gas_leak: gasLeakSensors,
-    earthquake: earthquakeSensors,
-    security: securitySensors,
-    water_leak: waterLeakSensors,
-    air_quality: airQualitySensors,
-    other: ambientSensors,
+const CRISIS_TARGETS: Record<CrisisType, Partial<SensorSnapshot>> = {
+    fire: { temperature_c: 85, smoke_ppm: 900, co_ppm: 150, flame_detected: true, sound_db: 85 },
+    gas_leak: { gas_lpg_ppm: 400, gas_methane_ppm: 200, co_ppm: 120, air_quality_index: 200 },
+    earthquake: { vibration_g: 1.2, sound_db: 80, motion_detected: true },
+    security: { motion_detected: true, door_open: true, sound_db: 90 },
+    water_leak: { water_level_cm: 10, moisture_detected: true, humidity_pct: 95 },
+    air_quality: { air_quality_index: 250, co2_ppm: 2200 },
+    other: {}
 };
 
-// const PHOTO_FILE_PATH = path.join(__dirname, "../../../ai/fire_crisis_scene_base64_with_prefix.txt");
-let DUMMY_PHOTO = "";
-
-/*
-try {
-    if (fs.existsSync(PHOTO_FILE_PATH)) {
-        DUMMY_PHOTO = fs.readFileSync(PHOTO_FILE_PATH, "utf8").trim();
-        logger.info(`Successfully loaded high-res photo from ${PHOTO_FILE_PATH} (${(DUMMY_PHOTO.length / 1024 / 1024).toFixed(2)} MB)`);
-    } else {
-        logger.warn(`Photo file not found at ${PHOTO_FILE_PATH}. Using empty string.`);
-    }
-} catch (err: any) {
-    logger.error(`Error reading high-res photo: ${err.message}`);
-}
-*/
-
-const PROFILE_WEIGHTS: { profile: CrisisType; weight: number }[] = [
-    { profile: "fire", weight: 1.0 },
-];
-
-function pickSensorProfile(): CrisisType {
-    const roll = Math.random();
-    let cumulative = 0;
-    for (const entry of PROFILE_WEIGHTS) {
-        cumulative += entry.weight;
-        if (roll <= cumulative) return entry.profile;
-    }
-    return "other";
+function moveTowards(current: number, target: number, step: number): number {
+    if (current < target) return +(current + step).toFixed(2);
+    if (current > target) return +(current - step).toFixed(2);
+    return current;
 }
 
 import { setPauseVenueId } from "./redis_listener.service.js";
-
-
-
-let venueId: string = "";
 
 export async function fetchVenueFromDb() {
     try {
@@ -226,25 +88,17 @@ export async function fetchVenueFromDb() {
         if (admin && admin.venue_id) {
             venueId = admin.venue_id.toString();
             setPauseVenueId(venueId);
-            logger.info(`Locked IoT Sandbox to venue_id: ${venueId} (via Admin Account ${admin.email || admin.name || 'Unknown'})`);
         } else {
-            logger.warn("No admin found. Falling back to naive venue discovery...");
             const venue = await Venue.findOne({});
             if (venue) {
                 venueId = venue._id.toString();
                 setPauseVenueId(venueId);
-                logger.info(`Latched onto naive venue_id: ${venueId}`);
-            } else {
-                logger.warn("No venue or admin found in DB");
             }
         }
     } catch (err: any) {
-        logger.error("Failed to fetch primary configuration from DB: " + err.message);
+        logger.error("DB Fetch Error: " + err.message);
     }
 }
-
-let devices: DeviceConfig[] = [];
-const deviceUptimes = new Map<string, number>();
 
 export async function initDevices(): Promise<DeviceConfig[]> {
     await fetchVenueFromDb();
@@ -252,6 +106,7 @@ export async function initDevices(): Promise<DeviceConfig[]> {
     const startTime = Date.now();
     for (const d of devices) {
         deviceUptimes.set(d.device_id, startTime);
+        deviceStates.set(d.device_id, getInitialAmbient());
     }
     return devices;
 }
@@ -265,10 +120,45 @@ export function getVenueId(): string {
 }
 
 export function generateReading(device: DeviceConfig): { reading: SensorReading; profile: CrisisType } {
-    const profile = pickSensorProfile();
-    const sensors = SENSOR_GENERATORS[profile]();
-    const bootTime = deviceUptimes.get(device.device_id) || Date.now();
+    let state = deviceStates.get(device.device_id) || getInitialAmbient();
+    const roll = Math.random();
+    let profile: CrisisType = "other";
+    
+    if (roll < 0.005) profile = "fire";
+    else if (roll < 0.007) profile = "gas_leak";
+    else if (roll < 0.009) profile = "earthquake";
+    else if (roll < 0.011) profile = "security";
+    else if (roll < 0.013) profile = "water_leak";
+    else if (roll < 0.015) profile = "air_quality";
 
+    const targets = CRISIS_TARGETS[profile];
+    
+    const newState: SensorSnapshot = {
+        temperature_c: profile !== "other" && targets.temperature_c ? moveTowards(state.temperature_c, targets.temperature_c, 5) : drift(state.temperature_c, 20, 30, 0.2),
+        humidity_pct: profile !== "other" && targets.humidity_pct ? moveTowards(state.humidity_pct, targets.humidity_pct, 2) : drift(state.humidity_pct, 30, 60, 0.5),
+        smoke_ppm: profile !== "other" && targets.smoke_ppm ? moveTowards(state.smoke_ppm, targets.smoke_ppm, 50) : drift(state.smoke_ppm, 0, 20, 1),
+        co_ppm: profile !== "other" && targets.co_ppm ? moveTowards(state.co_ppm, targets.co_ppm, 10) : drift(state.co_ppm, 0, 10, 0.5),
+        co2_ppm: profile !== "other" && targets.co2_ppm ? moveTowards(state.co2_ppm, targets.co2_ppm, 100) : drift(state.co2_ppm, 400, 600, 5),
+        gas_lpg_ppm: profile !== "other" && targets.gas_lpg_ppm ? moveTowards(state.gas_lpg_ppm, targets.gas_lpg_ppm, 20) : drift(state.gas_lpg_ppm, 0, 15, 0.5),
+        gas_methane_ppm: profile !== "other" && targets.gas_methane_ppm ? moveTowards(state.gas_methane_ppm, targets.gas_methane_ppm, 10) : drift(state.gas_methane_ppm, 0, 10, 0.5),
+        air_quality_index: profile !== "other" && targets.air_quality_index ? moveTowards(state.air_quality_index, targets.air_quality_index, 10) : drift(state.air_quality_index, 10, 50, 1),
+        flame_detected: profile === "fire" ? (state.temperature_c > 50 ? true : false) : false,
+        motion_detected: profile === "security" || profile === "earthquake" || Math.random() > 0.9,
+        sound_db: profile !== "other" && targets.sound_db ? moveTowards(state.sound_db, targets.sound_db, 5) : drift(state.sound_db, 30, 50, 2),
+        vibration_g: profile !== "other" && targets.vibration_g ? moveTowards(state.vibration_g, targets.vibration_g, 0.1) : drift(state.vibration_g, 0, 0.05, 0.01),
+        water_level_cm: profile === "water_leak" ? moveTowards(state.water_level_cm, targets.water_level_cm || 0, 1) : 0,
+        moisture_detected: profile === "water_leak",
+        door_open: profile === "security" || (profile === "other" && Math.random() > 0.95),
+    };
+
+    deviceStates.set(device.device_id, newState);
+    
+    let effectiveProfile: CrisisType = "other";
+    if (newState.temperature_c > 45 || newState.smoke_ppm > 351 || newState.flame_detected) {
+        effectiveProfile = "fire";
+    }
+
+    const bootTime = deviceUptimes.get(device.device_id) || Date.now();
     const reading: SensorReading = {
         device_id: device.device_id,
         device_mac: device.device_mac,
@@ -278,7 +168,7 @@ export function generateReading(device: DeviceConfig): { reading: SensorReading;
         battery_level: +(85 + Math.random() * 15).toFixed(1),
         wifi_rssi: Math.floor(-30 - Math.random() * 40),
         venue_id: venueId,
-        sensors,
+        sensors: newState,
         location: {
             zone: device.zone,
             floor: device.floor,
@@ -292,5 +182,5 @@ export function generateReading(device: DeviceConfig): { reading: SensorReading;
         },
     };
 
-    return { reading, profile };
+    return { reading, profile: effectiveProfile };
 }

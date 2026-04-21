@@ -1,28 +1,31 @@
 import { getDevices, generateReading } from "../services/sensor.service.js";
 import { transmitReading } from "../services/transmitter.service.js";
 import { logger } from "../utils/logger.js";
+import { getPauseState, isSessionActive } from "../services/redis_listener.service.js";
 
 let isRunning = false;
 const deviceTimeouts = new Map<string, NodeJS.Timeout>();
 
-import { getPauseState } from "../services/redis_listener.service.js";
-
 async function poll(device: any) {
     if (!isRunning) return;
 
-    if (getPauseState()) {
-        const timeout = setTimeout(() => poll(device), 10000); // Check again in 10s if paused
+    const active = await isSessionActive();
+    if (!active) {
+        const timeout = setTimeout(() => poll(device), 5000);
         deviceTimeouts.set(device.device_id, timeout);
         return;
     }
 
-    const { reading, profile } = generateReading(device);
+    if (getPauseState()) {
+        const timeout = setTimeout(() => poll(device), 10000);
+        deviceTimeouts.set(device.device_id, timeout);
+        return;
+    }
 
+    const { reading } = generateReading(device);
     await transmitReading(reading);
 
-    const delay = 1000; // Always poll constantly at <40% confidence.
-
-    const timeout = setTimeout(() => poll(device), delay);
+    const timeout = setTimeout(() => poll(device), 1000);
     deviceTimeouts.set(device.device_id, timeout);
 }
 
@@ -41,5 +44,4 @@ export function stopCronJobs(): void {
         clearTimeout(timeout);
     }
     deviceTimeouts.clear();
-    logger.info("Adaptive polling stopped");
 }

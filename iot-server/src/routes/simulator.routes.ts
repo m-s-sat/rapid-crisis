@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { getStatus, startSimulator, stopSimulator } from "../controllers/simulator.controller.js";
+import { getStatus, heartbeat, terminate } from "../controllers/simulator.controller.js";
 
 const router = Router();
 
 router.get("/status", getStatus);
-router.post("/simulator/start", startSimulator);
-router.post("/simulator/stop", stopSimulator);
+router.post("/heartbeat", heartbeat);
+router.post("/terminate", terminate);
 
 export default router;

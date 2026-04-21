@@ -9,6 +9,10 @@ let pauseTimeout: NodeJS.Timeout | null = null;
 let pauseStartedAt: number = 0;
 const PAUSE_DURATION_MS = 15 * 60 * 1000;
 
+const redisClient = createClient({ url: env.REDIS_URL });
+redisClient.on("error", (err) => logger.error(`Redis Client Error: ${err}`));
+await redisClient.connect();
+
 export function getPauseState() {
     return isPaused;
 }
@@ -24,6 +28,26 @@ export function setPauseVenueId(venueId: string) {
     currentVenueId = venueId;
 }
 
+export async function isSessionActive(): Promise<boolean> {
+    if (!currentVenueId) return false;
+    const key = `session:active:${currentVenueId}`;
+    const exists = await redisClient.exists(key);
+    return exists === 1;
+}
+
+export async function refreshSession() {
+    if (!currentVenueId) return;
+    const key = `session:active:${currentVenueId}`;
+    await redisClient.set(key, "active", { EX: 30 });
+}
+
+export async function terminateSession() {
+    if (!currentVenueId) return;
+    const key = `session:active:${currentVenueId}`;
+    await redisClient.del(key);
+    logger.info(`Session terminated for venue: ${currentVenueId}`);
+}
+
 function broadcastToClients(data: object) {
     const payload = JSON.stringify(data);
     wss.clients.forEach((client) => {
@@ -35,13 +59,10 @@ function broadcastToClients(data: object) {
 
 export async function startRedisListener() {
     const subscriber = createClient({ url: env.REDIS_URL });
-
     subscriber.on("error", (err) => logger.error(`Redis Subscriber Error: ${err}`));
-
+    
     try {
         await subscriber.connect();
-        logger.info("Connected to Redis for Messaging Status Listener");
-
         await subscriber.subscribe("messaging_status", (message) => {
             try {
                 const data = JSON.parse(message);
@@ -52,14 +73,9 @@ export async function startRedisListener() {
                         clearTimeout(pauseTimeout);
                         pauseTimeout = null;
                     }
-                    logger.info(`Crisis overridden/canceled by admin. Resuming telemetry immediately.`);
                     broadcastToClients({ type: "telemetry_resumed" });
                 } else if (data.type === "sent" || data.type === "decided_by_admin") {
-                    if (data.venue_id && currentVenueId && data.venue_id !== currentVenueId) {
-                        return;
-                    }
-
-                    logger.warn(`Received >40% confidence crisis event from backend! Pausing telemetry for 15 minutes.`);
+                    if (data.venue_id && currentVenueId && data.venue_id !== currentVenueId) return;
                     isPaused = true;
                     pauseStartedAt = Date.now();
                     if (pauseTimeout) clearTimeout(pauseTimeout);
@@ -67,16 +83,15 @@ export async function startRedisListener() {
                         isPaused = false;
                         pauseStartedAt = 0;
                         pauseTimeout = null;
-                        logger.info(`Resuming normal telemetry generation.`);
                         broadcastToClients({ type: "telemetry_resumed" });
                     }, PAUSE_DURATION_MS);
                     broadcastToClients({ type: "telemetry_paused", duration_ms: PAUSE_DURATION_MS });
                 }
             } catch (err) {
-                logger.error(`Failed to parse REDIS msg: ${err}`);
+                logger.error(`Redis msg parse error: ${err}`);
             }
         });
     } catch (err) {
-        logger.error(`Failed to connect Redis Subscriber: ${err}`);
+        logger.error(`Redis listener error: ${err}`);
     }
 }

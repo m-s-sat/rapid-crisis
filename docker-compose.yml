@@ -90,8 +90,8 @@ services:
     environment:
       - MONGO_URI=mongodb://mongodb:27017/google-solutions
       - REDIS_URL=redis://redis:6379
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.0-flash}
     depends_on:
       - mongodb
       - redis
