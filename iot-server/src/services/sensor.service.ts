@@ -46,7 +46,7 @@ function drift(current: number, min: number, max: number, noise: number): number
 
 function getInitialAmbient(): SensorSnapshot {
     return {
-        temperature_c: 24,
+        temperature_c: 32,
         humidity_pct: 45,
         smoke_ppm: 5,
         co_ppm: 2,
@@ -120,10 +120,13 @@ export function getVenueId(): string {
 }
 
 export function generateReading(device: DeviceConfig): { reading: SensorReading; profile: CrisisType } {
+    const bootTime = deviceUptimes.get(device.device_id) || Date.now();
+    const elapsedSeconds = (Date.now() - bootTime) / 1000;
+
     let state = deviceStates.get(device.device_id) || getInitialAmbient();
     const roll = Math.random();
     let profile: CrisisType = "other";
-    
+
     if (roll < 0.005) profile = "fire";
     else if (roll < 0.007) profile = "gas_leak";
     else if (roll < 0.009) profile = "earthquake";
@@ -132,9 +135,9 @@ export function generateReading(device: DeviceConfig): { reading: SensorReading;
     else if (roll < 0.015) profile = "air_quality";
 
     const targets = CRISIS_TARGETS[profile];
-    
+
     const newState: SensorSnapshot = {
-        temperature_c: profile !== "other" && targets.temperature_c ? moveTowards(state.temperature_c, targets.temperature_c, 5) : drift(state.temperature_c, 20, 30, 0.2),
+        temperature_c: profile !== "other" && targets.temperature_c ? moveTowards(state.temperature_c, targets.temperature_c, 5) : drift(state.temperature_c, elapsedSeconds < 30 ? 30 : 46, elapsedSeconds < 30 ? 40 : 50, 0.5),
         humidity_pct: profile !== "other" && targets.humidity_pct ? moveTowards(state.humidity_pct, targets.humidity_pct, 2) : drift(state.humidity_pct, 30, 60, 0.5),
         smoke_ppm: profile !== "other" && targets.smoke_ppm ? moveTowards(state.smoke_ppm, targets.smoke_ppm, 50) : drift(state.smoke_ppm, 0, 20, 1),
         co_ppm: profile !== "other" && targets.co_ppm ? moveTowards(state.co_ppm, targets.co_ppm, 10) : drift(state.co_ppm, 0, 10, 0.5),
@@ -152,13 +155,13 @@ export function generateReading(device: DeviceConfig): { reading: SensorReading;
     };
 
     deviceStates.set(device.device_id, newState);
-    
+
     let effectiveProfile: CrisisType = "other";
     if (newState.temperature_c > 45 || newState.smoke_ppm > 351 || newState.flame_detected) {
         effectiveProfile = "fire";
     }
 
-    const bootTime = deviceUptimes.get(device.device_id) || Date.now();
+    // bootTime already calculated at the top
     const reading: SensorReading = {
         device_id: device.device_id,
         device_mac: device.device_mac,
