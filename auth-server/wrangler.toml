@@ -5,6 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 ENVIRONMENT = "production"
+MONGO_DATABASE = "sentinel_ai"
 
 [observability]
 enabled = true
