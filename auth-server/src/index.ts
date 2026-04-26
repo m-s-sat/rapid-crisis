@@ -1,52 +1,44 @@
-import express from 'express';
-import morgan from 'morgan';
-import cookieParser from 'cookie-parser';
-import cors from 'cors';
-import helmet from 'helmet';
-import { rateLimit } from 'express-rate-limit';
-import { env } from './config/env.js';
-import { mongoManagerInstance } from './db/mongo.js';
-import authRoutes from './routes/auth.routes.js';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { secureHeaders } from 'hono/secure-headers';
+import { MongoClient } from 'mongodb';
 
-const app = express();
+type Bindings = {
+  MONGO_URI: string;
+  MONGO_DATABASE: string;
+  JWT_ACCESS_SECRET: string;
+  FRONTEND_URL: string;
+};
 
-app.set('trust proxy', 1);
+let cachedClient: MongoClient | null = null;
 
-app.use(helmet());
-const globalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 100,
-    message: { message: "Too many requests from this IP, please try again later." },
-});
-app.use(globalLimiter);
-
-app.use(express.json());
-app.use(cookieParser());
-app.use(morgan('dev'));
-app.use(cors({
-    origin: env.FRONTEND_URL,
-    credentials: true
-}));
-
-app.use('/api/auth', authRoutes);
-
-async function startServer() {
-    try {
-        const mongoClient = await mongoManagerInstance.init();
-
-        if (!mongoClient) {
-            console.error("Failed to connect to database");
-            process.exit(1);
-        }
-
-        app.listen(env.PORT, () => {
-            console.log(`Auth Server is running on port ${env.PORT}`);
-        });
-    }
-    catch (err: any) {
-        console.error("Error starting server: ", err);
-        process.exit(1);
-    }
+async function getMongoClient(uri: string) {
+  if (cachedClient) return cachedClient;
+  const client = new MongoClient(uri, { maxPoolSize: 1 });
+  cachedClient = await client.connect();
+  return cachedClient;
 }
 
-startServer();
+const app = new Hono<{ Bindings: Bindings }>();
+
+app.use('*', secureHeaders());
+app.use('*', async (c, next) => {
+  const corsMiddleware = cors({ origin: c.env.FRONTEND_URL || '*', credentials: true });
+  return corsMiddleware(c, next);
+});
+
+app.post('/login', async (c) => {
+  const { email, password } = await c.req.json();
+  const client = await getMongoClient(c.env.MONGO_URI);
+  const db = client.db(c.env.MONGO_DATABASE || "sentinel_ai");
+  const user = await db.collection("users").findOne({ email });
+
+  if (!user) return c.json({ error: 'User not found' }, 404);
+  
+  // Logic to verify password and issue JWT...
+  return c.json({ message: 'Login logic goes here' });
+});
+
+app.get('/', (c) => c.text('Sentinel AI Auth API (Edge-Native)'));
+
+export default app;

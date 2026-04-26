@@ -1,0 +1,22 @@
+name = "sentinel-primary-api"
+main = "src/index.ts"
+compatibility_date = "2024-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+
+[[durable_objects.bindings]]
+name = "CRISIS_STATE"
+class_name = "CrisisState"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["CrisisState"]
+
+[[services]]
+binding = "AUTH_SERVICE"
+service = "sentinel-auth-api"
+
+[observability]
+enabled = true

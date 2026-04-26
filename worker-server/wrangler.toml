@@ -1,0 +1,14 @@
+name = "sentinel-messaging-worker"
+main = "src/index.ts"
+compatibility_date = "2024-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+
+[[services]]
+binding = "PRIMARY_API"
+service = "sentinel-primary-api"
+
+[observability]
+enabled = true

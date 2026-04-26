@@ -3,7 +3,7 @@ import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolk
 import { logout, setCredentials } from "../auth/authSlice";
 
 const baseQuery = fetchBaseQuery({
-  baseUrl: "/api",
+  baseUrl: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002/api",
   credentials: "include",
   prepareHeaders: (headers, { getState }) => {
     const token = (getState() as any).auth.accessToken;

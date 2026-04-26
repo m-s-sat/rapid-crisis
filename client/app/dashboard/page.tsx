@@ -24,7 +24,7 @@ export default function Dashboard() {
 
   const sendHeartbeat = async () => {
     try {
-      await fetch("http://localhost:4000/api/simulator/heartbeat", {
+      await fetch(`${process.env.NEXT_PUBLIC_IOT_URL || "http://localhost:4000"}/api/simulator/heartbeat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" }
       });
@@ -46,7 +46,7 @@ export default function Dashboard() {
       heartbeatRef.current = null;
     }
     // Explicitly terminate the session on the backend to stop data transfer immediately
-    fetch("http://localhost:4000/api/simulator/terminate", {
+    fetch(`${process.env.NEXT_PUBLIC_IOT_URL || "http://localhost:4000"}/api/simulator/terminate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" }
     }).catch(err => console.error("Termination failed", err));

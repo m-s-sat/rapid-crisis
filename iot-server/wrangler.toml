@@ -1,0 +1,23 @@
+name = "sentinel-iot-worker"
+main = "src/index.ts"
+compatibility_date = "2024-04-01"
+
+[vars]
+ENVIRONMENT = "production"
+NUM_DEVICES = "5"
+
+# Cron Trigger - runs every minute
+[triggers]
+crons = ["* * * * *"]
+
+# Service Bindings
+[[services]]
+binding = "AI_SERVICE"
+service = "sentinel-ai-worker"
+
+[[services]]
+binding = "PRIMARY_API"
+service = "sentinel-primary-api"
+
+[observability]
+enabled = true

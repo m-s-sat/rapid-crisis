@@ -1,0 +1,7 @@
+name = "sentinel-dashboard"
+pages_build_output_dir = ".next"
+
+[vars]
+NEXT_PUBLIC_API_URL = "https://primary.your-subdomain.workers.dev/api"
+NEXT_PUBLIC_IOT_URL = "https://iot.your-subdomain.a.run.app"
+ENVIRONMENT = "production"
