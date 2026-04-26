@@ -18,7 +18,7 @@ async function getMongoClient(uri: string) {
     maxPoolSize: 1,
     minPoolSize: 0,
     serverSelectionTimeoutMS: 5000,
-  });
+  } as any);
   cachedClient = await client.connect();
   return cachedClient;
 }
