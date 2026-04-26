@@ -5,17 +5,26 @@ import { logout, setCredentials } from "../auth/authSlice";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
 const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL || "http://localhost:3001";
 
-const baseQuery = fetchBaseQuery({
-  baseUrl: `${API_URL}/api`,
+const rawBaseQuery = fetchBaseQuery({
   credentials: "include",
   prepareHeaders: (headers, { getState }) => {
     const token = (getState() as any).auth.accessToken;
-    if (token) {
-      headers.set("authorization", `Bearer ${token}`);
-    }
+    if (token) headers.set('Authorization', `Bearer ${token}`);
     return headers;
   },
 });
+
+const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (args, api, extraOptions) => {
+  const url = typeof args === 'string' ? args : args.url;
+  const baseUrl = url.includes('auth/') ? AUTH_URL : API_URL;
+  
+  // Clean up the URL to remove /api/ if it's being added twice
+  const adjustedArgs = typeof args === 'string' 
+    ? { url: args.replace(/^\/?api\//, '') } 
+    : { ...args, url: args.url.replace(/^\/?api\//, '') };
+
+  return rawBaseQuery({ ...adjustedArgs, url: `${baseUrl}/api/${adjustedArgs.url}` }, api, extraOptions);
+};
 
 const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
   args,

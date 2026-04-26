@@ -45,6 +45,7 @@ app.post('/internal/broadcast', async (c) => {
   return c.json({ status: 'broadcasted' });
 });
 
+
 app.get('/', (c) => c.text('Sentinel AI Primary API (Edge)'));
 
 export default app;
