@@ -1,78 +1,20 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
-import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolkit/query";
-import { logout, setCredentials } from "../auth/authSlice";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL || "http://localhost:3001";
-
-const rawBaseQuery = fetchBaseQuery({
-  credentials: "include",
-  prepareHeaders: (headers, { getState }) => {
-    const token = (getState() as any).auth.accessToken;
-    if (token) headers.set('Authorization', `Bearer ${token}`);
-    return headers;
-  },
-});
-
-const baseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (args, api, extraOptions) => {
-  const url = typeof args === 'string' ? args : args.url;
-  const baseUrl = url.includes('auth/') ? AUTH_URL : API_URL;
-  
-  // Clean up the URL to remove /api/ if it's being added twice
-  const adjustedArgs = typeof args === 'string' 
-    ? { url: args.replace(/^\/?api\//, '') } 
-    : { ...args, url: args.url.replace(/^\/?api\//, '') };
-
-  return rawBaseQuery({ ...adjustedArgs, url: `${baseUrl}/api/${adjustedArgs.url}` }, api, extraOptions);
-};
-
-const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryError> = async (
-  args,
-  api,
-  extraOptions
-) => {
-  let result = await baseQuery(args, api, extraOptions);
-
-  // If unauthorized, try to refresh
-  const isRefresh = (typeof args === "string" ? args : args.url).includes("/auth/refresh");
-
-  if (result.error && (result.error.status === 401 || result.error.status === 403) && !isRefresh) {
-    const refreshResult: any = await baseQuery(
-      {
-        url: "/auth/refresh",
-        method: "POST",
-      },
-      api,
-      extraOptions
-    );
-
-    if (refreshResult.data && refreshResult.data.success) {
-      const { accessToken, admin, venue_id } = refreshResult.data;
-      
-      // Update store with new access token
-      api.dispatch(setCredentials({ 
-          accessToken, 
-          admin: admin || (api.getState() as any).auth.admin, 
-          venue_id: venue_id || (api.getState() as any).auth.venue_id 
-      }));
-
-      // Retry original request with new token (prepareHeaders will pick it up)
-      result = await baseQuery(args, api, extraOptions);
-    } else {
-      // Refresh failed or revoked
-      api.dispatch(logout());
-      // Only redirect on client side
-      if (typeof window !== "undefined") {
-        window.location.href = "/login";
-      }
-    }
-  }
-  return result;
-};
 
 export const apiSlice = createApi({
   reducerPath: "api",
-  baseQuery: baseQueryWithReauth,
-  tagTypes: ["Staff", "Guest", "Crisis"],
-  endpoints: (builder) => ({}),
+  baseQuery: fetchBaseQuery({
+    baseUrl: `${API_URL}/api`,
+    credentials: "include",
+    prepareHeaders: (headers, { getState }) => {
+      const token = (getState() as any).auth.accessToken;
+      if (token) {
+        headers.set("authorization", `Bearer ${token}`);
+      }
+      return headers;
+    },
+  }),
+  tagTypes: ["Crisis", "Venue", "Staff"],
+  endpoints: () => ({}),
 });

@@ -1,9 +1,10 @@
 import type { Action, ThunkAction } from "@reduxjs/toolkit";
 import { combineSlices, configureStore } from "@reduxjs/toolkit";
 import authSlice from "./features/auth/authSlice";
+import { authApiSlice } from "./features/auth/authApiSlice";
 import { apiSlice } from "./features/api/apiSlice";
 
-const rootReducer = combineSlices(apiSlice, authSlice);
+const rootReducer = combineSlices(apiSlice, authApiSlice, authSlice);
 // Infer the `RootState` type from the root reducer
 export type RootState = ReturnType<typeof rootReducer>;
 
@@ -20,7 +21,7 @@ export const makeStore = () => {
       return getDefaultMiddleware({
         immutableCheck: { warnAfter: 256 },
         serializableCheck: false,
-      }).concat(apiSlice.middleware);
+      }).concat(apiSlice.middleware, authApiSlice.middleware);
     },
   });
 };

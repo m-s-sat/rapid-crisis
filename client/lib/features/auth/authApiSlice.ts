@@ -1,6 +1,13 @@
-import { apiSlice } from "../api/apiSlice";
+import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
-export const authApiSlice = apiSlice.injectEndpoints({
+const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL || "http://localhost:3001";
+
+export const authApiSlice = createApi({
+  reducerPath: 'authApi',
+  baseQuery: fetchBaseQuery({
+    baseUrl: `${AUTH_URL}/api`,
+    credentials: "include",
+  }),
   endpoints: (builder) => ({
     login: builder.mutation({
       query: (credentials) => ({
