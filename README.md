@@ -95,4 +95,4 @@ This solution is optimized for **Google Cloud Free Tier**:
 - **Cloud Run**: Microservices
 - **Firebase**: Frontend
 - **MongoDB Atlas**: Database (M0 Free)
-- **AI Studio**: Gemini 2.5 Flash-lite (Free)
+- **AI Studio**: Gemini 2.0 Flash (Free)
