@@ -1,6 +1,6 @@
 name = "sentinel-primary-api"
 main = "src/index.ts"
-compatibility_date = "2024-04-01"
+compatibility_date = "2026-04-26"
 compatibility_flags = ["nodejs_compat"]
 
 [vars]
@@ -12,7 +12,7 @@ class_name = "CrisisState"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["CrisisState"]
+new_sqlite_classes = ["CrisisState"]
 
 [[services]]
 binding = "AUTH_SERVICE"

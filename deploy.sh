@@ -1,30 +1,39 @@
 #!/bin/bash
+ROOT_DIR=$(pwd)
+echo "Starting Sentinel AI Edge Deployment from $ROOT_DIR..."
 
-echo " Starting Sentinel AI Edge Deployment..."
+deploy_service() {
+    echo "-----------------------------------"
+    echo "📦 Setting up and Deploying $1..."
+    cd "$ROOT_DIR/$1"
+    npm install && npx -y wrangler@3 deploy
+    cd "$ROOT_DIR"
+}
 
 # 1. Auth API
-echo " Deploying Auth API..."
-cd auth-server && npx wrangler deploy && cd ..
+deploy_service "auth-server"
 
 # 2. Primary API
-echo " Deploying Primary API..."
-cd primary-server && npx wrangler deploy && cd ..
+deploy_service "primary-server"
 
 # 3. AI Hub
-echo " Deploying AI Hub..."
-cd ai && npx wrangler deploy && cd ..
+deploy_service "ai"
 
 # 4. Messaging Worker
-echo " Deploying Messaging Worker..."
-cd worker-server && npx wrangler deploy && cd ..
+deploy_service "worker-server"
 
 # 5. IoT Simulator
-echo " Deploying IoT Simulator..."
-cd iot-server && npx wrangler deploy && cd ..
+deploy_service "iot-server"
 
-# 6. Frontend
-echo " Building and Deploying Frontend..."
-cd client && npm run build && npx wrangler pages deploy .next && cd ..
+# 6. Frontend (Fixed for Static Export)
+echo "-----------------------------------"
+echo "📦 Building and Deploying Frontend..."
+cd "$ROOT_DIR/client"
+npm install
+npm run build
+# Deploy the 'out' folder created by Next.js static export
+npx -y wrangler@3 pages deploy out --project-name sentinel-dashboard
+cd "$ROOT_DIR"
 
-echo " All services deployed!"
-echo " Next Step: Run 'npx wrangler secret put [KEY]' in each folder for your MONGO_URI and API Keys."
+echo "-----------------------------------"
+echo "✅ All services deployed!"

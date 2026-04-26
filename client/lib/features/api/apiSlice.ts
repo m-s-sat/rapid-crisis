@@ -2,8 +2,11 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import type { BaseQueryFn, FetchArgs, FetchBaseQueryError } from "@reduxjs/toolkit/query";
 import { logout, setCredentials } from "../auth/authSlice";
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002";
+const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_URL || "http://localhost:3001";
+
 const baseQuery = fetchBaseQuery({
-  baseUrl: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002/api",
+  baseUrl: `${API_URL}/api`,
   credentials: "include",
   prepareHeaders: (headers, { getState }) => {
     const token = (getState() as any).auth.accessToken;
