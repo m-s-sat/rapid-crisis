@@ -1,90 +1,98 @@
 # Sentinel AI — Enterprise Crisis Command & IoT Intelligence
 
-A distributed, real-time crisis monitoring and emergency response platform designed for high-occupancy venues. Utilizing IoT telemetry, AI-driven multimodal classification, and an enterprise-grade command interface.
+Sentinel AI is a distributed, real-time crisis monitoring and emergency response platform designed for high-occupancy hospitality venues. It utilizes IoT telemetry, Gemini 2.0 AI-driven multimodal classification, and an enterprise-grade command interface to accelerate emergency response times.
 
 ---
 
-## 🚀 Quick Start (Dockerized)
+## 🛠 Prerequisites
 
-The entire ecosystem is containerized for instant local execution and cloud deployment.
+Before starting, ensure you have the following ready:
 
-### 1. Prerequisites
-- **Docker** & **Docker Compose**
-- **Google Gemini API Key** (required for AI classification)
-
-### 2. Configure Environment
-Create a `.env` file in the root directory (or ensure your environment has these set):
-```bash
-GOOGLE_API_KEY=your_google_api_key_here
-GEMINI_MODEL=gemini-2.0-flash
-```
-
-If no LLM key is provided, the AI worker now falls back to deterministic sensor-based classification so critical incidents are still processed.
-
-### 3. Launch the Ecosystem
-```bash
-docker-compose up --build
-```
-
-### 4. Access the Dashboard
-Once the build is complete, access the unified platform at:
-**[http://localhost](http://localhost)**
-
-*Nginx routes all traffic automatically:*
-- **Frontend**: `http://localhost/`
-- **Auth API**: `http://localhost/auth/`
-- **Primary API**: `http://localhost/api/`
-- **IoT Simulator**: `http://localhost/api/iot/`
+1.  **Google Gemini API Key**: [Get it here from AI Studio](https://aistudio.google.com/). Required for intelligent incident classification.
+2.  **Docker Engine & Docker Compose**: (Recommended) For one-command deployment.
+3.  **Local Infrastructure (if running manually)**:
+    *   **MongoDB**: v6.0+ (Port 27017)
+    *   **Redis**: v7.0+ (Port 6379)
+    *   **Bun or Node.js**: To run the backend services.
+    *   **Python 3.10+**: To run the AI Analytics Node.
 
 ---
 
-## 💎 Architecture & Features
+## 🚀 Setup Path A: Docker (Zero-to-Hero)
 
-### 🌐 Distributed System Nodes
-- **Nginx Gateway**: Consolidated entry point for all frontend and backend services.
-- **Primary Server**: Central logic hub handling AI results and WebSocket orchestration.
-- **Auth Server**: Secure JWT-based authentication with Redis session persistence.
-- **Worker Server**: Dedicated consumer for SMS dispatching (Twilio) and crisis deduplication.
-- **AI Analytics Node**: Python worker utilizing **Google Gemini Flash-Lite** for real-time risk assessment.
-- **IoT Simulator**: High-fidelity simulation of 15+ metrics (temp, smoke, vibration, etc.) from distributed devices.
+The entire ecosystem is containerized. This is the fastest way to see the value.
 
-### ⚡ Persistent Intelligence
-- **Redis-Backed Operations**: Critical session state and sensor snapshots are persisted in Redis, ensuring the system survives reboots without state loss.
-- **Instant Recovery**: Dashboards "replay" the last known system state upon connection.
-- **Real-Time Sync**: Multi-client consistency via Redis Pub/Sub and WebSocket broadcasting.
+1.  **Clone the Repository**:
+    ```bash
+    git clone https://github.com/your-repo/sentinel-ai.git
+    cd sentinel-ai
+    ```
+2.  **Configure Environment**: Create a `.env` file in the root:
+    ```bash
+    GOOGLE_API_KEY=your_gemini_key_here
+    GEMINI_MODEL=gemini-2.0-flash
+    ```
+3.  **Launch**:
+    ```bash
+    docker-compose up --build
+    ```
+4.  **Access**: Open [http://localhost](http://localhost) in your browser.
 
 ---
 
-## 🛠 Manual Development Setup
+## 💻 Setup Path B: Manual (Local Development)
 
-If you prefer to run services manually for debugging:
+If you need to debug individual services, follow this order:
 
-### Step 1 — Infrastructure
-Ensure **MongoDB** (port 27017) and **Redis** (port 6379) are running locally.
+### 1. Database & Cache
+Start your local MongoDB and Redis instances.
 
-### Step 2 — Seed Data
-```bash
-cd primary-server
-bun run src/db/seed.ts
-```
+### 2. Service Initialization
+Run `bun install` (or `npm install`) in every directory. Then:
 
-### Step 3 — Start Services
-Run `bun run dev` (or `npm run dev`) in the following directories:
-- `auth-server` (Port 3001)
-- `primary-server` (Port 3002)
-- `iot-server` (Port 4000)
-- `worker-server`
-- `client` (Port 3000)
+| Service | Directory | Command | Port |
+| :--- | :--- | :--- | :--- |
+| **Auth Server** | `/auth-server` | `bun run dev` | 3001 |
+| **Primary Server** | `/primary-server` | `bun run dev` | 3002 |
+| **Worker Server** | `/worker-server` | `bun run dev` | - |
+| **IoT Simulator** | `/iot-server` | `bun run dev` | 4000 |
+| **Frontend UI** | `/client` | `bun run dev` | 3000 |
+| **AI Node** | `/ai` | `python main.py` | - |
 
-And start the AI worker:
-```bash
-cd ai
-python main.py
-```
+---
+
+## 🕹️ How to Use: Triggering Your First Crisis
+
+The system remains in a "Monitoring" state by default. To see the AI in action:
+
+1.  **Open the IoT Simulator**: Navigate to `http://localhost:4000` (or `http://localhost/api/iot/` in Docker).
+2.  **Start Telemetry**: Click the **"START TELEMETRY"** button. You will see 15+ sensors (Temp, Smoke, Sound, etc.) start streaming data.
+3.  **Trigger a Crisis**: Use the "Crisis Presets" (e.g., *Fire in Kitchen*) or toggle **"CHAOS MODE"**.
+4.  **Watch the Magic**:
+    *   The IoT server captures a "Visual Evidence" snapshot.
+    *   **Gemini 2.0** analyzes the multimodal data in the background.
+    *   The **Staff Dashboard** (`http://localhost:3000`) will pop up with a high-priority alert, showing the AI's confidence score and recommended action.
+
+---
+
+## 💎 Key Features
+- **Multimodal AI**: Uses Gemini to differentiate between a "Birthday Candle" and a "Kitchen Fire" using both sensor data and photos.
+- **Crisis Deduplication**: Intelligent logic prevents spamming the staff with multiple alerts for the same incident.
+- **State Persistence**: Redis ensures that if the server restarts, the active crisis state is instantly restored.
+- **Automated Response**: Real-time Twilio SMS integration for automated guest evacuation alerts.
 
 ---
 
 ## 🛡 Security & Reliability
-- **JWT Rotation**: Secure access and refresh token cycles managed via Redis.
-- **Chaos Testing**: The IoT simulator includes a "Chaos Mode" with weighted crisis profiles and sensor jitter to stress-test the AI's skepticism.
-- **Deduplication**: Intelligent alert suppression prevents notification fatigue during sustained incidents.
+- **JWT Rotation**: Secure access and refresh cycles with Redis persistence.
+- **Hardware Simulation**: ESP32 logic simulation with realistic sensor jitter and drift.
+- **Deduplication**: Alert suppression logic prevents notification fatigue.
+
+---
+
+## ☁️ Deployment (Free Tier)
+This solution is optimized for **Google Cloud Free Tier**:
+- **Cloud Run**: Microservices
+- **Firebase**: Frontend
+- **MongoDB Atlas**: Database (M0 Free)
+- **AI Studio**: Gemini 2.5 Flash-lite (Free)
